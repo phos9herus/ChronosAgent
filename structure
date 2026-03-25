@@ -1,30 +1,39 @@
 project_root/
-├── app/                      # Web 后端核心目录 (FastAPI)
+├── app/                              # Web 后端核心目录 (FastAPI)
 │   ├── __init__.py
-│   ├── main.py               # FastAPI 实例初始化与路由挂载
-│   ├── api/                  # API 路由控制器
-│   │   ├── endpoints.py      # 常规 HTTP 接口
-│   │   └── websockets.py     # WebSocket 全双工通信接口
-│   ├── core/                 # 核心配置与生命周期
-│   │   └── config.py         # TODO:未构造
-│   ├── schemas/              # Pydantic 数据验证模型
-│   │   ├── chat_schema.py    # WebSocket 消息输入输出模型
-│   │   └── role_schema.py    # 角色信息验证模型
-│   └── services/             # 业务逻辑层
-│   │   ├── chat_service.py   # 对接原 RoleplaySession
-│   │   └── data_service.py   # 对接原 RoleRegistry 与 AuthManager
-│   ├── static/               # 存放前端的 css, js, 图片等静态资源
-│   │   ├──css
-│   │   │  └──style.css
-│   │   └──js
-│   │      └──chat.js
-│   └── templates/            # 存放 HTML 模板页面
-│       └── index.html        # 前端主页面
-├── cli/                      # 终端调试入口
+│   ├── main.py                       # FastAPI 实例初始化、Lifespan 预加载与 /avatars 静态路由挂载
+│   ├── api/                          # API 路由控制器
+│   │   ├── endpoints.py              # 【大改】HTTP 接口 (新增双头像落盘 /upload_avatar、个人中心路由 /user)
+│   │   └── websockets.py             # WebSocket 全双工通信接口
+│   ├── core/                         # 核心配置与生命周期
+│   │   └── config.py         
+│   ├── schemas/                      # Pydantic 数据验证模型
+│   │   ├── chat_schema.py    
+│   │   └── role_schema.py            # 验证模型 (扩充了头像模式等字段)
+│   ├── services/                     # 业务逻辑服务层 
+│   │   ├── chat_service.py           # 对接 RoleplaySession 活跃内存会话
+│   │   ├── data_service.py           # 【修改】全局数据服务总线 (挂载了 user, role, auth 单例)
+│   │   ├── role_manager.py           # 【大改】角色注册表 (新增马甲名、双轨头像路径提取)
+│   │   ├── user_manager.py           # 【新增】用户个人中心全局数据管理基座
+│   │   └── auth_manager.py           # API 凭证管理中心
+│   ├── static/                       # 前端静态资源
+│   │   ├── css/
+│   │   │   └── style.css             # 【大改】新增启动动画、左右双抽屉、卡片渐变背景、纯手写裁剪台样式
+│   │   └── js/
+│   │       └── chat.js               # 【大改】二段式裁剪状态机、内存热更新引擎、Boot异步启动序列
+│   └── templates/            
+│       └── index.html                # 【大改】注入 Boot 遮罩、个人中心左侧抽屉、全屏纯 DOM 裁剪台
+├── cli/                              # 终端调试入口
 │   ├── __init__.py
-│   └── roleplay_cli.py       # 将原 main.py 的终端打印逻辑移入此处
-├── data/                     # JSON与向量数据库存放处
-├── llm_adapters/             # 模型请求适配器
-├── vdb_tools/                # 记忆数据库工具
-├── main.py                   # 全局启动入口 (分发 Web 或 CLI)
-└── requirements.txt
+│   └── roleplay_cli.py       
+├── data/                             # 动态数据生成与本地落盘区 (运行后自动生成)
+│   ├── avatars/                      # 【新增】物理存放用户与角色裁剪后的 1:1 圆形和 4:1 长条形头像文件 (.png)
+│   ├── roles/                        # 各个角色的底层物理文件夹 (内部包含各个角色的 role_meta.json 与 ChromaDB 向量数据)
+│   ├── user_meta.json                # 【新增】用户的全局个人中心配置 (昵称、模式、头像引用)
+│   ├── roles_registry.json           # 角色注册表索引
+│   └── credentials.json              # API Key 凭证配置
+├── llm_adapters/                     # 模型请求底层适配器 (如 QwenNativeAdapter)
+├── vdb_tools/                        # 记忆数据库与底层存储组件
+│   └── hierarchical_memory_db.py     # 【大改】增强了深拷贝阻断、全量子段拦截
+├── main.py                           # 全局启动入口 (分发 Web 模式 或 CLI 模式)
+└── requirements.txt                  # Python 依赖包清单
