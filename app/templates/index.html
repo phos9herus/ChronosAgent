@@ -1,1 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Roleplay WebUI</title>
+    <link href="https://unpkg.com/antd@5.15.0/dist/reset.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <h3 class="sidebar-title">角色列表</h3>
+            <div id="role-list"></div>
+        </div>
 
+        <div class="main-content">
+            <div class="chat-header">
+                <div class="header-left">
+                    当前角色: <span id="current-role-title">未选择</span>
+                </div>
+                <button id="open-settings" class="text-btn">设置</button>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <div class="system-hint">请选择角色开始对话</div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <div id="preview-area" class="preview-container"></div>
+
+                    <div class="toolbar">
+                        <div class="toolbar-left">
+                            <label class="plus-btn-label" title="上传图片">
+                                +
+                                <input type="file" id="file-input" multiple accept="image/*" style="display:none">
+                            </label>
+                            <button id="think-toggle-btn" class="think-btn-inactive">思维</button>
+                        </div>
+
+                        <textarea id="user-input" placeholder="输入消息..." rows="1" disabled></textarea>
+                        <button id="send-btn" class="send-btn" disabled>发送</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-drawer" class="settings-drawer">
+            <div class="settings-header">
+                <span class="drawer-title">角色配置</span>
+                <button id="close-settings" class="close-x-btn">&times;</button>
+            </div>
+
+            <div class="drawer-scroll-body">
+                <div class="setting-item">
+                    <label>角色设定 (System Prompt)</label>
+                    <textarea id="set-prompt" class="prompt-textarea" rows="8"></textarea>
+                </div>
+
+                <div class="setting-grid">
+                    <div class="setting-item">
+                        <label>Temperature</label>
+                        <input type="number" id="set-temp" step="0.1">
+                    </div>
+                    <div class="setting-item">
+                        <label>Top P</label>
+                        <input type="number" id="set-top-p" step="0.05">
+                    </div>
+                    <div class="setting-item">
+                        <label>Top K</label>
+                        <input type="number" id="set-top-k" step="1">
+                    </div>
+                    <div class="setting-item">
+                        <label>重复惩罚</label>
+                        <input type="number" id="set-repetition" step="0.1">
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label>新鲜度惩罚</label>
+                    <input type="number" id="set-presence" step="0.1">
+                </div>
+                <div class="setting-item">
+                    <label>思维链上限</label>
+                    <input type="number" id="set-budget" step="1024">
+                </div>
+            </div>
+
+            <div class="drawer-footer">
+                <button id="save-settings" class="btn-primary">保存角色配置</button>
+            </div>
+        </div>
+    </div>
+    <script src="/static/js/chat.js"></script>
+</body>
+</html>
