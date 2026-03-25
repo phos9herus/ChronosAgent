@@ -9,7 +9,6 @@ import chromadb
 
 from chromadb.utils import embedding_functions
 
-# 全局单例嵌入模型缓存
 _GLOBAL_EMBEDDING_FN = None
 
 def get_embedding_function():
@@ -22,7 +21,6 @@ def get_embedding_function():
         print(">>> 嵌入模型加载完成！")
     return _GLOBAL_EMBEDDING_FN
 
-# 定义 HF 缓存路径防 Windows 权限报错
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 HF_CACHE_DIR = os.path.join(PROJECT_ROOT, "data", "hf_models")
@@ -31,17 +29,10 @@ os.environ["HF_HOME"] = HF_CACHE_DIR
 
 
 class HierarchicalMemoryManager:
-    """
-    四级时间退化 + 滚动遗忘 + 冷库自动分表(Sharding) 的角色专属记忆引擎。
-    带有 role_meta.json 物理硬映射机制，保证角色记忆文件夹 100% 可移植。
-    """
-
     def __init__(self, role_id: str, role_name: str, max_context_length: int = 6000,
                  initial_api_settings: dict = None, system_prompt: str = "", strict_mode: bool = False):
         self.role_name = role_name
         self.max_context_length = max_context_length
-
-        # 使用中文名作为文件夹，保证极高可读性
         self.base_dir = os.path.join(PROJECT_ROOT, "data", "roles", self.role_name)
 
         self.paths = {
@@ -54,22 +45,16 @@ class HierarchicalMemoryManager:
             "yearly": os.path.join(self.base_dir, "summary_L4_yearly"),
         }
 
-        # 创建目录
         for k, path in self.paths.items():
             if k not in ["context", "meta"]:
                 os.makedirs(path, exist_ok=True)
 
-        # ==========================================
-        # 本地硬映射与元数据加载/初始化
-        # ==========================================
         if os.path.exists(self.paths["meta"]):
             with open(self.paths["meta"], "r", encoding="utf-8") as f:
                 self.meta_data = json.load(f)
                 self.role_id = self.meta_data.get("role_id", role_id)
         else:
             self.role_id = role_id
-
-            # 默认的基础参数 (包含思考开关下放)
             default_settings = {
                 "temperature": 1.0,
                 "top_p": 0.8,
@@ -80,7 +65,6 @@ class HierarchicalMemoryManager:
                 "display_think": True,
                 "voice_id": ""
             }
-
             if initial_api_settings:
                 default_settings.update(initial_api_settings)
 
@@ -96,11 +80,7 @@ class HierarchicalMemoryManager:
             with open(self.paths["meta"], "w", encoding="utf-8") as f:
                 json.dump(self.meta_data, f, ensure_ascii=False, indent=4)
 
-        # ==========================================
-        # 挂载底层 ChromaDB 数据库
-        # ==========================================
         self.embedding_fn = get_embedding_function()
-
         self.summary_dbs = {}
         for tier in ["daily", "weekly", "monthly", "yearly"]:
             client = chromadb.PersistentClient(path=self.paths[tier])
@@ -110,51 +90,42 @@ class HierarchicalMemoryManager:
             )
 
         self.raw_clients = {}
-
-        self.retention_limits = {
-            "daily": 14,
-            "weekly": 8,
-            "monthly": 12,
-            "yearly": 100
-        }
-
+        self.retention_limits = { "daily": 14, "weekly": 8, "monthly": 12, "yearly": 100 }
         self.context_buffer = self._load_context()
         self._compressing = False
 
     def update_meta(self, **kwargs):
-        """动态更新 meta_data 根级别的属性 (如 system_prompt) 并持久化"""
         self.meta_data.update(kwargs)
         with open(self.paths["meta"], "w", encoding="utf-8") as f:
             json.dump(self.meta_data, f, ensure_ascii=False, indent=4)
 
-    # 【修复】重构此方法，严格遵循同级拓扑契约
     def update_meta_settings(self, payload: dict):
         """动态更新角色 API 参数及核心系统设定并持久化"""
+        # 【核心修复 1】：深拷贝阻断字典突变，防止上游传入的字典被 pop 破坏
+        p_copy = payload.copy()
 
-        # 1. 如果 payload 中包含 system_prompt，必须将其提升到根节点更新
-        if "system_prompt" in payload:
-            self.meta_data["system_prompt"] = payload["system_prompt"]
+        # 【核心修复 2】：一次性提取所有根节点属性
+        root_keys = ["system_prompt", "display_name", "avatar_mode", "avatar_circle", "avatar_bg"]
+        for key in root_keys:
+            if key in p_copy:
+                self.meta_data[key] = p_copy.pop(key)
 
         # 2. 如果 payload 中包含 settings 嵌套域，则更新 settings 域
-        if "settings" in payload:
+        if "settings" in p_copy:
             if "settings" not in self.meta_data:
                 self.meta_data["settings"] = {}
-            self.meta_data["settings"].update(payload["settings"])
+            self.meta_data["settings"].update(p_copy["settings"])
         # 兼容旧逻辑：如果 payload 是平铺的参数字典
         else:
-            settings_payload = {k: v for k, v in payload.items() if k != "system_prompt"}
-            if settings_payload:
+            if p_copy:
                 if "settings" not in self.meta_data:
                     self.meta_data["settings"] = {}
-                self.meta_data["settings"].update(settings_payload)
+                self.meta_data["settings"].update(p_copy)
 
         # 3. 持久化到磁盘
         with open(self.paths["meta"], "w", encoding="utf-8") as f:
             json.dump(self.meta_data, f, ensure_ascii=False, indent=4)
 
-    # ==========================================
-    # 模块 A: 上下文读写
-    # ==========================================
     def _load_context(self) -> list:
         if os.path.exists(self.paths["context"]):
             with open(self.paths["context"], "r", encoding="utf-8") as f:
@@ -165,9 +136,6 @@ class HierarchicalMemoryManager:
         with open(self.paths["context"], "w", encoding="utf-8") as f:
             json.dump(self.context_buffer, f, ensure_ascii=False, indent=4)
 
-    # ==========================================
-    # 模块 B: Raw冷库半年期自动分表 (Sharding)
-    # ==========================================
     def _get_raw_db_folder_name(self, timestamp: float) -> str:
         dt = datetime.fromtimestamp(timestamp)
         half_year_tag = "H1_Jan_to_Jun" if dt.month <= 6 else "H2_Jul_to_Dec"
@@ -188,9 +156,6 @@ class HierarchicalMemoryManager:
             )
         return self.raw_clients[folder_name]
 
-    # ==========================================
-    # 模块 C: 滚动遗忘算法 (Pruning)
-    # ==========================================
     def _enforce_retention_policy(self, tier: str):
         limit = self.retention_limits.get(tier)
         if not limit: return
@@ -208,13 +173,9 @@ class HierarchicalMemoryManager:
             ids_to_delete = [r[0] for r in records[:overflow_count]]
             collection.delete(ids=ids_to_delete)
 
-    # ==========================================
-    # 模块 D: 动态时间切片路由检索
-    # ==========================================
     def retrieve_with_time_routing(self, query: str, top_k: int = 3) -> List[str]:
         current_time = time.time()
         results = []
-
         day_14 = 14 * 24 * 3600
         week_8 = 8 * 7 * 24 * 3600
         month_12 = 365 * 24 * 3600
@@ -245,9 +206,6 @@ class HierarchicalMemoryManager:
 
         return results
 
-    # ==========================================
-    # 数据写入主接口
-    # ==========================================
     def add_memory(self, role: str, text: str):
         if not text.strip(): return
         current_time = time.time()
