@@ -1,0 +1,30 @@
+project_root/
+├── app/                      # Web 后端核心目录 (FastAPI)
+│   ├── __init__.py
+│   ├── main.py               # FastAPI 实例初始化与路由挂载
+│   ├── api/                  # API 路由控制器
+│   │   ├── endpoints.py      # 常规 HTTP 接口 (获取角色列表等)
+│   │   └── websockets.py     # WebSocket 全双工通信接口
+│   ├── core/                 # 核心配置与生命周期
+│   │   └── config.py         # TODO:未构造
+│   ├── schemas/              # Pydantic 数据验证模型
+│   │   ├── chat_schema.py    # WebSocket 消息输入输出模型
+│   │   └── role_schema.py    # 角色信息验证模型
+│   └── services/             # 业务逻辑层 (封装原有的纯业务代码)
+│   │   ├── chat_service.py   # 对接原 RoleplaySession
+│   │   └── data_service.py   # 对接原 RoleRegistry 与 AuthManager
+│   ├── static/               # 存放前端的 css, js, 图片等静态资源 (目前建个空文件夹即可)
+│   │   ├──css
+│   │   │  └──style.css
+│   │   └──js
+│   │      └──chat.js
+│   └── templates/            # 存放 HTML 模板页面
+│       └── index.html        # 前端主页面
+├── cli/                      # 终端调试入口
+│   ├── __init__.py
+│   └── roleplay_cli.py       # 将原 main.py 的终端打印逻辑移入此处
+├── data/                     # (保持原样) JSON与向量数据库存放处
+├── llm_adapters/             # (保持原样) 模型请求适配器
+├── vdb_tools/                # (保持原样) 记忆数据库工具
+├── main.py                   # 全局启动入口 (分发 Web 或 CLI)
+└── requirements.txt
