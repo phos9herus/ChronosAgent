@@ -15,24 +15,39 @@ class RoleRegistry:
         if not role_info: return False
 
         meta_path = os.path.join("data", "roles", role_info.get("name"), "role_meta.json")
+        # 修复 1：确保父级目录存在，避免新建角色时找不到路径
+        os.makedirs(os.path.dirname(meta_path), exist_ok=True)
+
+        role_data = {}
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, 'r', encoding='utf-8') as f:
+                    role_data = json.load(f)
+            except Exception:
+                pass  # 解析失败则当做空字典处理
+
+        # 拦截根节点字段，防止被塞进 settings 域
+        root_keys = ["system_prompt", "display_name", "avatar_mode", "avatar_circle", "avatar_bg"]
+        for key in root_keys:
+            if key in new_settings:
+                role_data[key] = new_settings.pop(key)
+
+        if "settings" not in role_data:
+            role_data["settings"] = {}
+
+        # 修复 2：正确剥离并合并 settings 里面的二级字典，防止嵌套套娃
+        if "settings" in new_settings and isinstance(new_settings["settings"], dict):
+            role_data["settings"].update(new_settings.pop("settings"))
+
+        if new_settings:  # 将剩下的零散参数也放入超参数
+            role_data["settings"].update(new_settings)
+
         try:
-            with open(meta_path, 'r', encoding='utf-8') as f:
-                role_data = json.load(f)
-
-            # 【核心修改】：拦截根节点字段，防止被塞进 settings 域
-            root_keys = ["system_prompt", "display_name", "avatar_mode", "avatar_circle", "avatar_bg"]
-            for key in root_keys:
-                if key in new_settings:
-                    role_data[key] = new_settings.pop(key)
-
-            if "settings" not in role_data: role_data["settings"] = {}
-            if new_settings:  # 剩下的才是大模型超参数
-                role_data["settings"].update(new_settings)
-
             with open(meta_path, 'w', encoding='utf-8') as f:
                 json.dump(role_data, f, ensure_ascii=False, indent=4)
             return True
-        except Exception:
+        except Exception as e:
+            print(f"磁盘写入失败: {e}")
             return False
 
     def _load(self) -> list:
