@@ -1,4 +1,5 @@
 # app/main.py
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -11,17 +12,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
 
+from vdb_tools.hierarchical_memory_db import get_embedding_function # 导入模型单例加载器
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     FastAPI 生命周期管理器
     """
     print("Web 服务正在启动...")
+    print(">>> 正在预加载核心嵌入模型与向量空间，请稍候...")
+    get_embedding_function() # 【核心触发】：强行唤醒并加载 1.5GB 的大模型
+    print(">>> 模型预加载完成，神经引擎已就绪！")
     yield
     print("Web 服务正在关闭，执行安全清理...")
-    # 确保在按 Ctrl+C 关闭服务器时，所有未保存的长期记忆都能被凝固保存
-    chat_service.shutdown_all()
-    print("资源清理完毕。")
 
 # 初始化 FastAPI 实例
 app = FastAPI(
@@ -45,7 +48,8 @@ app.add_middleware(
 # ==========================================
 # 挂载静态资源目录 (CSS, JS, 图片)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
+os.makedirs("data/avatars", exist_ok=True)
+app.mount("/avatars", StaticFiles(directory="data/avatars"), name="avatars")
 # 初始化 Jinja2 模板引擎
 templates = Jinja2Templates(directory="app/templates")
 
