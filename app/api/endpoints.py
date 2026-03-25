@@ -14,13 +14,13 @@ from vdb_tools.hierarchical_memory_db import HierarchicalMemoryManager
 router = APIRouter()
 
 class RoleSettingsUpdate(BaseModel):
-    temperature: float
-    top_p: float
-    top_k: int
-    repetition_penalty: float
-    presence_penalty: float
-    thinking_budget: int
-    enable_think: bool
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    repetition_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    thinking_budget: Optional[int] = None
+    enable_think: Optional[bool] = None
 
 class RoleMetaUpdate(BaseModel):
     system_prompt: Optional[str] = None
