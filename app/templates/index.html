@@ -11,37 +11,52 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <div id="boot-loader" class="boot-loader-overlay">
+        <div class="boot-loader-card">
+            <div class="boot-logo">✨</div>
+            <h2 class="boot-title">Roleplay Engine</h2>
+            <div class="boot-subtitle">正在准备运行环境，请稍候。</div>
+            <div class="boot-progress-container"><div id="boot-progress-bar" class="boot-progress-bar"></div></div>
+            <div class="boot-status"><span class="boot-status-dot"></span><span id="boot-status-text">正在启动核心服务...</span></div>
+        </div>
+    </div>
+
     <div class="app-container">
         <div class="sidebar">
             <h3 class="sidebar-title">角色列表</h3>
-            <div id="role-list"></div>
+            <div id="btn-create-role" class="role-item create-role-btn">
+                <span class="plus-icon">+</span> 新建角色
+            </div>
+            <div id="role-list" class="flex-list"></div>
+
+            <div class="sidebar-footer">
+                <div id="btn-personal-center" class="role-item user-item flex-item">
+                    <div id="sidebar-user-avatar" class="sidebar-avatar"></div>
+                    <span id="sidebar-user-name" class="item-name">个人中心</span>
+                </div>
+            </div>
         </div>
 
         <div class="main-content">
             <div class="chat-header">
                 <div class="header-left">
-                    当前角色: <span id="current-role-title">未选择</span>
+                     <span id="current-role-title">未选择</span>
                 </div>
                 <button id="open-settings" class="text-btn">设置</button>
             </div>
-
             <div class="chat-messages" id="chat-messages">
                 <div class="system-hint">请选择角色开始对话</div>
             </div>
-
             <div class="chat-input-area">
                 <div class="input-wrapper">
                     <div id="preview-area" class="preview-container"></div>
-
                     <div class="toolbar">
                         <div class="toolbar-left">
                             <label class="plus-btn-label" title="上传图片">
-                                +
-                                <input type="file" id="file-input" multiple accept="image/*" style="display:none">
+                                + <input type="file" id="file-input" multiple accept="image/*" style="display:none">
                             </label>
-                            <button id="think-toggle-btn" class="think-btn-inactive">思维</button>
+                            <button id="think-toggle-btn" class="think-btn-inactive">深度思考: 关</button>
                         </div>
-
                         <textarea id="user-input" placeholder="输入消息..." rows="1" disabled></textarea>
                         <button id="send-btn" class="send-btn" disabled>发送</button>
                     </div>
@@ -49,52 +64,129 @@
             </div>
         </div>
 
-        <div id="settings-drawer" class="settings-drawer">
+        <div id="settings-drawer" class="settings-drawer right-drawer">
             <div class="settings-header">
                 <span class="drawer-title">角色配置</span>
                 <button id="close-settings" class="close-x-btn">&times;</button>
             </div>
-
             <div class="drawer-scroll-body">
+                <div class="avatar-edit-section">
+                    <div id="set-role-avatar-preview" class="avatar-large-preview" onclick="openCropper('role', state.currentRoleId)"></div>
+                    <div class="avatar-hint">点击更换角色头像</div>
+                </div>
+                <div class="setting-item">
+                    <label>角色名称 (显示名)</label>
+                    <input type="text" id="set-display-name">
+                </div>
+                <div class="setting-item">
+                    <label>头像显示模式</label>
+                    <select id="set-role-avatar-mode" class="mode-select">
+                        <option value="circle">经典圆形 (1:1)</option>
+                        <option value="gradient">卡片渐变背景 (4:1)</option>
+                    </select>
+                </div>
                 <div class="setting-item">
                     <label>角色设定 (System Prompt)</label>
-                    <textarea id="set-prompt" class="prompt-textarea" rows="8"></textarea>
+                    <textarea id="set-prompt" class="prompt-textarea" rows="6"></textarea>
                 </div>
+                <details class="advanced-settings-details" style="margin-bottom: 20px;">
+                    <summary>高级大模型参数</summary>
+                    <div class="setting-grid" style="margin-top: 12px;">
+                        <div class="setting-item"><label>Temperature</label><input type="number" id="set-temp" step="0.1"></div>
+                        <div class="setting-item"><label>Top P</label><input type="number" id="set-top-p" step="0.05"></div>
+                        <div class="setting-item"><label>Top K</label><input type="number" id="set-top-k" step="1"></div>
+                        <div class="setting-item"><label>重复惩罚</label><input type="number" id="set-repetition" step="0.1"></div>
+                        <div class="setting-item"><label>新鲜度惩罚</label><input type="number" id="set-presence" step="0.1"></div>
+                        <div class="setting-item"><label>思维链上限</label><input type="number" id="set-budget" step="1024"></div>
+                    </div>
+                </details>
+            </div>
+            <div class="drawer-footer"><button id="save-settings" class="btn-primary">保存角色配置</button></div>
+        </div>
 
-                <div class="setting-grid">
-                    <div class="setting-item">
-                        <label>Temperature</label>
-                        <input type="number" id="set-temp" step="0.1">
-                    </div>
-                    <div class="setting-item">
-                        <label>Top P</label>
-                        <input type="number" id="set-top-p" step="0.05">
-                    </div>
-                    <div class="setting-item">
-                        <label>Top K</label>
-                        <input type="number" id="set-top-k" step="1">
-                    </div>
-                    <div class="setting-item">
-                        <label>重复惩罚</label>
-                        <input type="number" id="set-repetition" step="0.1">
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <label>新鲜度惩罚</label>
-                    <input type="number" id="set-presence" step="0.1">
+        <div id="user-drawer" class="settings-drawer left-drawer">
+            <div class="settings-header">
+                <span class="drawer-title">个人中心</span>
+                <button id="close-user-drawer" class="close-x-btn">&times;</button>
+            </div>
+            <div class="drawer-scroll-body">
+                <div class="avatar-edit-section">
+                    <div id="set-user-avatar-preview" class="avatar-large-preview" onclick="openCropper('user')"></div>
+                    <div class="avatar-hint">点击更换你的头像</div>
                 </div>
                 <div class="setting-item">
-                    <label>思维链上限</label>
-                    <input type="number" id="set-budget" step="1024">
+                    <label>我的昵称</label>
+                    <input type="text" id="set-user-name">
+                </div>
+                <div class="setting-item">
+                    <label>个人卡片模式</label>
+                    <select id="set-user-avatar-mode" class="mode-select">
+                        <option value="circle">经典圆形 (1:1)</option>
+                        <option value="gradient">卡片渐变背景 (4:1)</option>
+                    </select>
                 </div>
             </div>
+            <div class="drawer-footer"><button id="save-user-settings" class="btn-primary">保存个人信息</button></div>
+        </div>
+    </div>
 
-            <div class="drawer-footer">
-                <button id="save-settings" class="btn-primary">保存角色配置</button>
+    <div id="create-role-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header" style="text-align: center; padding: 20px 24px 0;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600;">创建新角色</h3>
+            </div>
+            <div class="modal-body drawer-scroll-body" style="padding: 24px; overflow-y: auto;">
+                <div class="avatar-edit-section">
+                    <div id="create-role-avatar-preview" class="avatar-large-preview" onclick="openCropper('create_role')"></div>
+                    <div class="avatar-hint">设置角色头像 (可选)</div>
+                </div>
+                <div class="setting-item">
+                    <label>角色名称 <span style="color: #ff4d4f;">*</span></label>
+                    <input type="text" id="create-role-name" placeholder="例如：毒舌向导、代码审阅官..." required>
+                </div>
+                <div class="setting-item">
+                    <label>角色设定 (System Prompt)</label>
+                    <textarea id="create-role-prompt" class="prompt-textarea" rows="3" placeholder="你是一个..."></textarea>
+                </div>
+                <details class="advanced-settings-details">
+                    <summary>高级参数设置 (已填入系统推荐值)</summary>
+                    <div class="setting-grid" style="margin-top: 16px;">
+                        <div class="setting-item"><label>Temperature</label><input type="number" id="create-temp" step="0.1" value="1.0"></div>
+                        <div class="setting-item"><label>Top P</label><input type="number" id="create-top-p" step="0.05" value="0.8"></div>
+                        <div class="setting-item"><label>Top K</label><input type="number" id="create-top-k" step="1" value="20"></div>
+                        <div class="setting-item"><label>重复惩罚</label><input type="number" id="create-repetition" step="0.1" value="1.1"></div>
+                        <div class="setting-item"><label>新鲜度惩罚</label><input type="number" id="create-presence" step="0.1" value="0.0"></div>
+                        <div class="setting-item"><label>思维链上限</label><input type="number" id="create-budget" step="1024" value="81920"></div>
+                    </div>
+                </details>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-create-role" class="btn-secondary">取消</button>
+                <button id="submit-create-role" class="btn-primary" style="width: auto; padding: 10px 24px;">保存并创建</button>
             </div>
         </div>
     </div>
+
+    <div id="cropper-modal" class="modal-overlay" style="display: none; z-index: 3000;">
+        <div class="cropper-wrapper">
+            <div class="cropper-header">
+                <h3>拖动图片调整裁剪区域</h3>
+                <button class="close-x-btn" onclick="closeCropper()">&times;</button>
+            </div>
+            <div class="cropper-body">
+                <canvas id="cropper-canvas"></canvas>
+                <div id="cropper-mask" class="cropper-mask">
+                    <div id="cropper-box" class="cropper-box"></div>
+                </div>
+            </div>
+            <div class="cropper-footer">
+                <input type="file" id="cropper-file-input" accept="image/*" style="display:none;">
+                <button class="btn-secondary" onclick="document.getElementById('cropper-file-input').click()">选择图片</button>
+                <button id="cropper-confirm-btn" class="btn-primary" onclick="confirmCrop()">确认裁剪</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/chat.js"></script>
 </body>
 </html>
