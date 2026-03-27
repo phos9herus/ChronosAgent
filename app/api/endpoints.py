@@ -3,13 +3,18 @@ import re
 import os
 import uuid
 import base64
+import copy
+import shutil
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from app.services.data_service import data_service
 from app.services.chat_service import chat_service
+from app.services.stats_service import stats_service
 from app.schemas.role_schema import RoleCreateRequest
 from vdb_tools.hierarchical_memory_db import HierarchicalMemoryManager
+from app.config.models import get_all_model_details, is_valid_model
 
 router = APIRouter()
 
@@ -32,6 +37,18 @@ class UserProfileUpdate(BaseModel):
     display_name: Optional[str] = None
     avatar_mode: Optional[str] = None
 
+class GlobalSettingsUpdate(BaseModel):
+    model: Optional[str] = None
+
+class ConversationCreateRequest(BaseModel):
+    name: Optional[str] = None
+
+class ConversationUpdateRequest(BaseModel):
+    name: str
+
+class DepthRecallModeUpdate(BaseModel):
+    depth_recall_mode: str
+
 # 【核心修改】：支持两段式头像的上传接收
 class AvatarUploadRequest(BaseModel):
     target_type: str  # "user" 或 "role"
@@ -46,6 +63,29 @@ async def get_user_profile():
 @router.put("/user")
 async def update_user_profile(data: UserProfileUpdate):
     return data_service.user_manager.update_user(data.model_dump(exclude_unset=True))
+
+@router.get("/models")
+async def get_models_list():
+    """
+    返回可用的Qwen模型列表及详细信息
+    """
+    return {"models": get_all_model_details()}
+
+@router.put("/settings")
+async def update_global_settings(data: GlobalSettingsUpdate):
+    """
+    更新全局设置，如模型选择
+    """
+    if data.model:
+        # 验证模型是否在可用列表中
+        if not is_valid_model(data.model):
+            raise HTTPException(status_code=400, detail=f"无效的模型: {data.model}")
+        
+        # 保存到用户配置中
+        update_dict = {"preferred_model": data.model}
+        data_service.user_manager.update_user(update_dict)
+    
+    return {"status": "success"}
 
 @router.post("/upload_avatar")
 async def upload_avatar(data: AvatarUploadRequest):
@@ -74,13 +114,13 @@ async def upload_avatar(data: AvatarUploadRequest):
             relative_paths["avatar_bg"] = update_dict["avatar_bg"]
 
         # 路由并更新内存
-        # 路由并更新内存 (引入 .copy() 防止字典引用污染)
+        # 使用深拷贝防止字典引用污染
         if data.target_type == "user":
-            data_service.user_manager.update_user(update_dict.copy())
+            data_service.user_manager.update_user(copy.deepcopy(update_dict))
         elif data.target_type == "role" and data.role_id:
-            data_service.role_registry.update_role_settings(data.role_id, update_dict.copy())
+            data_service.role_registry.update_role_settings(data.role_id, copy.deepcopy(update_dict))
             if data.role_id in chat_service.active_sessions:
-                chat_service.active_sessions[data.role_id].memory_manager.update_meta_settings(update_dict.copy())
+                chat_service.active_sessions[data.role_id].memory_manager.update_meta_settings(copy.deepcopy(update_dict))
         else:
             raise ValueError("缺失归属目标 role_id")
 
@@ -125,6 +165,19 @@ async def get_role_settings(role_id: str):
         **session.memory_manager.meta_data.get("settings", {})
     }
 
+@router.get("/roles/{role_id}/depth_recall_mode")
+async def get_depth_recall_mode(role_id: str):
+    session = chat_service.get_session(role_id)
+    return {
+        "depth_recall_mode": session.memory_manager.get_depth_recall_mode()
+    }
+
+@router.put("/roles/{role_id}/depth_recall_mode")
+async def set_depth_recall_mode(role_id: str, data: DepthRecallModeUpdate):
+    session = chat_service.get_session(role_id)
+    session.memory_manager.set_depth_recall_mode(data.depth_recall_mode)
+    return {"status": "success", "depth_recall_mode": data.depth_recall_mode}
+
 @router.put("/roles/{role_id}/settings")
 async def update_role_settings(role_id: str, data: RoleMetaUpdate):
     payload = data.model_dump(exclude_unset=True)
@@ -165,5 +218,218 @@ async def get_role_history(role_id: str):
                 except Exception:
                     pass
         clean_content = re.sub(r'\n?\[IMAGE:\s*.+?\]', '', content).strip()
-        history.append({"role": role, "content": clean_content, "images": images})
+        msg_data = {"role": role, "content": clean_content, "images": images}
+        if "model" in msg:
+            msg_data["model"] = msg["model"]
+        if "token_usage" in msg:
+            msg_data["token_usage"] = msg["token_usage"]
+        history.append(msg_data)
+    return history
+
+
+@router.get("/stats/models")
+async def get_models_stats():
+    return {"models": stats_service.get_all_models_stats()}
+
+
+@router.get("/stats/models/{model_id}")
+async def get_model_stats_detail(model_id: str):
+    stats = stats_service.get_model_stats_detail(model_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail=f"模型 {model_id} 无统计数据")
+    return stats
+
+
+@router.get("/stats/roles")
+async def get_roles_stats():
+    return {"roles": stats_service.get_all_roles_stats()}
+
+
+@router.get("/stats/roles/{role_id}")
+async def get_role_stats_detail(role_id: str):
+    stats = stats_service.get_role_stats_detail(role_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail=f"角色 {role_id} 无统计数据")
+    return stats
+
+
+@router.get("/roles/{role_id}/companion_days")
+async def get_companion_days(role_id: str):
+    """
+    获取角色的陪伴天数
+    """
+    try:
+        session = chat_service.get_session(role_id)
+        first_timestamp = session.memory_manager.get_first_conversation_timestamp()
+        current_timestamp = datetime.now().timestamp()
+        companion_days = (current_timestamp - first_timestamp) // (24 * 3600)
+        return {"companion_days": max(0, int(companion_days))}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/roles/{role_id}")
+async def delete_role(role_id: str):
+    """
+    删除指定角色
+    """
+    try:
+        role_info = data_service.role_registry.get_role_by_id(role_id)
+        if not role_info:
+            raise HTTPException(status_code=404, detail=f"角色 {role_id} 不存在")
+        
+        role_name = role_info["name"]
+        companion_days = 0
+        
+        try:
+            session = chat_service.get_session(role_id)
+            first_timestamp = session.memory_manager.get_first_conversation_timestamp()
+            current_timestamp = datetime.now().timestamp()
+            companion_days = (current_timestamp - first_timestamp) // (24 * 3600)
+            companion_days = max(0, int(companion_days))
+        except Exception:
+            companion_days = 0
+        
+        if role_id in chat_service.active_sessions:
+            try:
+                session = chat_service.active_sessions[role_id]
+                if hasattr(session, 'memory_manager') and hasattr(session.memory_manager, 'close'):
+                    session.memory_manager.close()
+            except Exception as e:
+                print(f"关闭数据库连接时出错: {e}")
+            del chat_service.active_sessions[role_id]
+        
+        role_dir = os.path.join("data", "roles", role_name)
+        if os.path.exists(role_dir):
+            max_retries = 10
+            retry_delay = 0.3
+            for attempt in range(max_retries):
+                try:
+                    import gc
+                    gc.collect()
+                    import time
+                    time.sleep(retry_delay * (attempt + 1))
+                    shutil.rmtree(role_dir, ignore_errors=True)
+                    if not os.path.exists(role_dir):
+                        break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        import tempfile
+                        try:
+                            temp_name = f"{role_dir}_to_delete_{int(time.time())}"
+                            os.rename(role_dir, temp_name)
+                            print(f"重命名文件夹以避免锁定: {role_dir} -> {temp_name}")
+                        except Exception as rename_error:
+                            print(f"重命名文件夹也失败了: {rename_error}")
+                            raise
+                    print(f"删除文件夹失败 (尝试 {attempt + 1}/{max_retries}): {e}")
+        
+        data_service.role_registry.roles = [r for r in data_service.role_registry.roles if r["role_id"] != role_id]
+        data_service.role_registry.save()
+        
+        return {"status": "success", "companion_days": companion_days}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除角色失败: {str(e)}")
+
+@router.get("/roles/{role_id}/conversations")
+async def get_conversations(role_id: str):
+    try:
+        session = chat_service.get_session(role_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"conversations": session.memory_manager.get_conversations()}
+
+@router.post("/roles/{role_id}/conversations")
+async def create_conversation(role_id: str, data: ConversationCreateRequest):
+    try:
+        session = chat_service.get_session(role_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    conv_id = session.memory_manager.create_conversation(data.name)
+    conversations = session.memory_manager.get_conversations()
+    new_conv = next((conv for conv in conversations if conv["conversation_id"] == conv_id), None)
+    return {"status": "success", "conversation_id": conv_id, "name": new_conv["name"] if new_conv else data.name}
+
+@router.get("/roles/{role_id}/conversations/{conv_id}")
+async def get_conversation(role_id: str, conv_id: str):
+    try:
+        session = chat_service.get_session(role_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    conversations = session.memory_manager.get_conversations()
+    conv = next((c for c in conversations if c["conversation_id"] == conv_id), None)
+    if not conv:
+        raise HTTPException(status_code=404, detail=f"对话 {conv_id} 不存在")
+    return conv
+
+@router.put("/roles/{role_id}/conversations/{conv_id}")
+async def update_conversation(role_id: str, conv_id: str, data: ConversationUpdateRequest):
+    try:
+        session = chat_service.get_session(role_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    conversations = session.memory_manager.get_conversations()
+    conv = next((c for c in conversations if c["conversation_id"] == conv_id), None)
+    if not conv:
+        raise HTTPException(status_code=404, detail=f"对话 {conv_id} 不存在")
+    session.memory_manager.update_conversation_name(conv_id, data.name)
+    return {"status": "success"}
+
+@router.delete("/roles/{role_id}/conversations/{conv_id}")
+async def delete_conversation(role_id: str, conv_id: str):
+    try:
+        session = chat_service.get_session(role_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    conversations = session.memory_manager.get_conversations()
+    conv = next((c for c in conversations if c["conversation_id"] == conv_id), None)
+    if not conv:
+        raise HTTPException(status_code=404, detail=f"对话 {conv_id} 不存在")
+    session.memory_manager.delete_conversation(conv_id)
+    return {"status": "success"}
+
+@router.get("/roles/{role_id}/conversations/{conv_id}/history")
+async def get_conversation_history(role_id: str, conv_id: str):
+    try:
+        session = chat_service.get_session(role_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+    conversations = session.memory_manager.get_conversations()
+    conv = next((c for c in conversations if c["conversation_id"] == conv_id), None)
+    if not conv:
+        raise HTTPException(status_code=404, detail=f"对话 {conv_id} 不存在")
+    
+    current_conv_id = session.memory_manager.current_conversation_id
+    session.memory_manager.switch_conversation(conv_id)
+    
+    context = session.memory_manager.context_buffer
+    img_dir = os.path.join(session.memory_manager.base_dir, "images")
+    history = []
+    for msg in context:
+        content = msg.get("content", "")
+        role = msg.get("role", "")
+        images = []
+        matches = re.findall(r'\[IMAGE:\s*(.+?)\]', content)
+        for filename in matches:
+            img_path = os.path.join(img_dir, filename)
+            if os.path.exists(img_path):
+                try:
+                    with open(img_path, "rb") as f:
+                        encoded = base64.b64encode(f.read()).decode("utf-8")
+                        mime = "image/png" if filename.endswith(".png") else "image/jpeg"
+                        images.append(f"data:{mime};base64,{encoded}")
+                except Exception:
+                    pass
+        clean_content = re.sub(r'\n?\[IMAGE:\s*.+?\]', '', content).strip()
+        msg_data = {"role": role, "content": clean_content, "images": images}
+        if "model" in msg:
+            msg_data["model"] = msg["model"]
+        if "token_usage" in msg:
+            msg_data["token_usage"] = msg["token_usage"]
+        history.append(msg_data)
+    
+    session.memory_manager.switch_conversation(current_conv_id)
     return history

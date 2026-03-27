@@ -4,31 +4,43 @@ import asyncio
 import os
 import base64
 import uuid
+import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.chat_service import chat_service
 
 router = APIRouter()
 
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
+        self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        async with self._lock:
+            self.active_connections.append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+    async def disconnect(self, websocket: WebSocket):
+        async with self._lock:
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
 
 manager = ConnectionManager()
+
 
 @router.websocket("/ws/chat")
 async def websocket_chat_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            raw_data = await websocket.receive_text()
+            try:
+                # 优化：将接收超时从 300 秒降低到 60 秒，避免长时间无响应
+                raw_data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"msg_type": "error", "content": "连接超时，请刷新页面重试"})
+                break
+
             try:
                 data = json.loads(raw_data)
             except Exception as e:
@@ -40,13 +52,21 @@ async def websocket_chat_endpoint(websocket: WebSocket):
             user_input = data.get("user_input", "")
             images = data.get("images", [])
             enable_think = data.get("enable_think", False)
+            enable_search = data.get("enable_search", False)
             force_deep_recall = data.get("force_deep_recall", False)
+            model = data.get("model", None)  # 新增：模型参数
+            conversation_id = data.get("conversation_id", None)  # 新增：对话ID参数
+            depth_recall_mode = data.get("depth_recall_mode", None)  # 新增：深度回忆模式参数
 
             if not role_id:
                 await websocket.send_json({"msg_type": "error", "content": "缺失 role_id"})
                 continue
 
             try:
+                # 记录请求开始时间
+                request_start_time = time.time()
+
+                
                 # 2. 获取会话
                 session = chat_service.get_session(role_id)
 
@@ -78,30 +98,51 @@ async def websocket_chat_endpoint(websocket: WebSocket):
 
                 # 3. 开始流式生成
                 # 注意：原生 images 依然传给 adapter，因为 Qwen API 视觉模型需要真的 base64
+
                 generator = session.stream_chat(
                     user_input=user_input,
                     images=images,
                     enable_think=enable_think,
-                    force_deep_recall=force_deep_recall
+                    enable_search=enable_search,
+                    force_deep_recall=force_deep_recall,
+                    model=model,  # 新增：传递模型参数
+                    conversation_id=conversation_id,  # 新增：传递对话ID参数
+                    depth_recall_mode=depth_recall_mode  # 新增：传递深度回忆模式参数
                 )
 
                 # 4. 迭代生成器并推送
+                message_count = 0
+
                 for msg_type, content in generator:
-                    await websocket.send_json({
-                        "msg_type": msg_type,
-                        "content": content,
-                        "role_id": role_id
-                    })
+                    message_count += 1
+
+                    try:
+                        await asyncio.wait_for(
+                            websocket.send_json({
+                                "msg_type": msg_type,
+                                "content": content,
+                                "role_id": role_id,
+                                "conversation_id": conversation_id or session.memory_manager.current_conversation_id
+                            }),
+                            timeout=10.0
+                        )
+
+                    except asyncio.TimeoutError:
+
+                        await websocket.send_json({"msg_type": "error", "content": "发送超时"})
+                        break
 
                 # 5. 发送完成信号
+                request_duration = time.time() - request_start_time
                 await websocket.send_json({"msg_type": "status", "content": "[DONE]"})
 
             except Exception as e:
-                await websocket.send_json({"msg_type": "error", "content": f"生成异常: {str(e)}"})
+                request_duration = time.time() - request_start_time if 'request_start_time' in locals() else 0
+                import traceback
+                traceback.print_exc()
+                await websocket.send_json({"msg_type": "error", "content": f"生成异常：{str(e)}"})
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("WebSocket 客户端已正常断开")
+        await manager.disconnect(websocket)
     except Exception as e:
-        manager.disconnect(websocket)
-        print(f"WebSocket 运行异常: {e}")
+        await manager.disconnect(websocket)
