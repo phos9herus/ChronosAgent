@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -29,6 +30,23 @@
             </div>
             <div id="role-list" class="flex-list"></div>
 
+            <div id="delete-mode-hint" class="delete-mode-hint" style="display: none;">
+                删除模式已激活，点击角色进行删除
+            </div>
+
+            <div id="btn-delete-role-mode" class="delete-role-btn">
+                删除角色
+            </div>
+
+            <div id="conversation-menu-container" class="conversation-menu" style="display: none;">
+                <div class="conversation-menu-header" onclick="toggleConversationMenu()">
+                    <span class="conversation-menu-title">对话记录</span>
+                    <button id="conversation-menu-toggle" class="conversation-menu-arrow">▼</button>
+                </div>
+                <div id="conversation-cards-container" class="conversation-cards">
+                </div>
+            </div>
+
             <div class="sidebar-footer">
                 <div id="btn-personal-center" class="role-item user-item flex-item">
                     <div id="sidebar-user-avatar" class="sidebar-avatar"></div>
@@ -41,8 +59,13 @@
             <div class="chat-header">
                 <div class="header-left">
                      <span id="current-role-title">未选择</span>
+                     <span id="current-conversation-title"></span>
+                     <div id="connection-status-light" class="connection-status-light" title="连接状态"></div>
                 </div>
-                <button id="open-settings" class="text-btn">设置</button>
+                <div class="header-buttons">
+                    <button id="open-conversation-settings" class="text-btn">对话设置</button>
+                    <button id="open-settings" class="text-btn">角色设置</button>
+                </div>
             </div>
             <div class="chat-messages" id="chat-messages">
                 <div class="system-hint">请选择角色开始对话</div>
@@ -55,9 +78,20 @@
                             <label class="plus-btn-label" title="上传图片">
                                 + <input type="file" id="file-input" multiple accept="image/*" style="display:none">
                             </label>
-                            <button id="think-toggle-btn" class="think-btn-inactive">深度思考: 关</button>
                         </div>
                         <textarea id="user-input" placeholder="输入消息..." rows="1" disabled></textarea>
+                        <select id="model-select" class="model-select" title="选择模型">
+                            <option value="qwen3-max">Qwen3-Max</option>
+                            <option value="qwen3.5-plus">Qwen3.5-Plus</option>
+                            <option value="qwen3.5-flash">Qwen3.5-Flash</option>
+                            <option value="qwq-plus">QwQ-Plus</option>
+                            <option value="qwen3-vl-plus">Qwen3-VL-Plus</option>
+                            <option value="qwen3-vl-flash">Qwen3-VL-Flash</option>
+                            <option value="qwen3.5-397b-a17b">Qwen3.5-397B-A17B</option>
+                        </select>
+                        <button id="think-toggle-btn" class="think-btn-inactive">深度思考: 关</button>
+                        <button id="search-toggle-btn" class="search-btn-inactive">联网搜索: 关</button>
+                        <button id="depth-recall-btn" class="depth-recall-off">深度回忆: 关</button>
                         <button id="send-btn" class="send-btn" disabled>发送</button>
                     </div>
                 </div>
@@ -125,8 +159,68 @@
                         <option value="gradient">卡片渐变背景 (4:1)</option>
                     </select>
                 </div>
+                <div class="setting-item">
+                    <button id="open-stats-drawer" class="btn-secondary" style="width:100%;">统计信息</button>
+                </div>
             </div>
             <div class="drawer-footer"><button id="save-user-settings" class="btn-primary">保存个人信息</button></div>
+        </div>
+
+        <div id="stats-drawer" class="settings-drawer left-drawer">
+            <div class="settings-header">
+                <span class="drawer-title">统计信息</span>
+                <button id="close-stats-drawer" class="close-x-btn">&times;</button>
+            </div>
+            <div class="drawer-scroll-body" id="stats-scroll-body">
+                <div id="stats-main-page">
+                    <div class="stats-nav-item" onclick="showStatsPage('models')">
+                        
+                        <span class="stats-nav-text">模型统计</span>
+                        <span class="stats-nav-arrow">›</span>
+                    </div>
+                    <div class="stats-nav-item" onclick="showStatsPage('roles')">
+                        
+                        <span class="stats-nav-text">角色统计</span>
+                        <span class="stats-nav-arrow">›</span>
+                    </div>
+                </div>
+                <div id="stats-models-page" style="display:none;">
+                    <div class="stats-breadcrumb">
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('main')">统计信息</span>
+                        <span>›</span>
+                        <span>模型统计</span>
+                    </div>
+                    <div id="stats-models-list"></div>
+                </div>
+                <div id="stats-model-detail-page" style="display:none;">
+                    <div class="stats-breadcrumb">
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('main')">统计信息</span>
+                        <span>›</span>
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('models')">模型统计</span>
+                        <span>›</span>
+                        <span id="stats-model-detail-title"></span>
+                    </div>
+                    <div id="stats-model-detail-content"></div>
+                </div>
+                <div id="stats-roles-page" style="display:none;">
+                    <div class="stats-breadcrumb">
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('main')">统计信息</span>
+                        <span>›</span>
+                        <span>角色统计</span>
+                    </div>
+                    <div id="stats-roles-list"></div>
+                </div>
+                <div id="stats-role-detail-page" style="display:none;">
+                    <div class="stats-breadcrumb">
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('main')">统计信息</span>
+                        <span>›</span>
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('roles')">角色统计</span>
+                        <span>›</span>
+                        <span id="stats-role-detail-title"></span>
+                    </div>
+                    <div id="stats-role-detail-content"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -167,6 +261,27 @@
         </div>
     </div>
 
+    <div id="conversation-settings-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header" style="text-align: center; padding: 20px 24px 0;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600;">对话设置</h3>
+            </div>
+            <div class="modal-body drawer-scroll-body" style="padding: 24px; overflow-y: auto;">
+                <div class="setting-item">
+                    <label>对话名称</label>
+                    <input type="text" id="set-conversation-name" placeholder="输入对话名称...">
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button id="delete-conversation-btn" class="btn-danger">删除对话</button>
+                <div style="display: flex; gap: 12px;">
+                    <button id="cancel-conversation-settings" class="btn-secondary">取消</button>
+                    <button id="save-conversation-settings" class="btn-primary" style="width: auto; padding: 10px 24px;">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="cropper-modal" class="modal-overlay" style="display: none; z-index: 3000;">
         <div class="cropper-wrapper">
             <div class="cropper-header">
@@ -183,6 +298,59 @@
                 <input type="file" id="cropper-file-input" accept="image/*" style="display:none;">
                 <button class="btn-secondary" onclick="document.getElementById('cropper-file-input').click()">选择图片</button>
                 <button id="cropper-confirm-btn" class="btn-primary" onclick="confirmCrop()">确认裁剪</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="model-info-popup" class="model-info-popup">
+        <button class="close-popup">&times;</button>
+        <h4 id="model-info-title">模型信息</h4>
+        <div id="model-info-content">
+            <div class="loading-state">加载中...</div>
+        </div>
+    </div>
+
+    <div id="delete-role-modal-1" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header" style="text-align: center; padding: 20px 24px 0;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600;">删除角色</h3>
+            </div>
+            <div class="modal-body" style="padding: 24px; text-align: center;">
+                <p style="margin: 0; color: var(--text-secondary);">是否确认删除角色 <span class="delete-role-name" style="font-weight: 600; color: var(--text-primary);">xxx</span>？</p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-delete-1" class="btn-secondary">取消</button>
+                <button id="confirm-delete-1" class="btn-primary" style="background: #ff4d4f;">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-role-modal-2" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header" style="text-align: center; padding: 20px 24px 0;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600;">最终确认</h3>
+            </div>
+            <div class="modal-body" style="padding: 24px; text-align: center;">
+                <p style="margin: 0; color: var(--text-secondary);">是否确认删除角色 <span class="delete-role-name" style="font-weight: 600; color: var(--text-primary);">xxx</span>，ta已经陪伴你 <span class="delete-days" style="font-weight: 600; color: var(--text-primary);">nnn</span> 天了？</p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-delete-2" class="btn-secondary">取消</button>
+                <button id="confirm-delete-2" class="btn-primary" style="background: #ff4d4f;">最终确认</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-conversation-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header" style="text-align: center; padding: 20px 24px 0;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600;">删除对话</h3>
+            </div>
+            <div class="modal-body" style="padding: 24px; text-align: center;">
+                <p style="margin: 0; color: var(--text-secondary);">确定要删除这个对话吗？<br>此操作不可逆，将仅删除该对话的上下文，不会影响记忆数据库。</p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-delete-conversation" class="btn-secondary">取消</button>
+                <button id="confirm-delete-conversation" class="btn-primary" style="background: #ff4d4f;">确认删除</button>
             </div>
         </div>
     </div>
