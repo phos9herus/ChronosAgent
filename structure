@@ -1,39 +1,77 @@
 project_root/
-├── app/                              # Web 后端核心目录 (FastAPI)
+├── app/                      # Web 后端核心目录 (FastAPI)
 │   ├── __init__.py
-│   ├── main.py                       # FastAPI 实例初始化、Lifespan 预加载与 /avatars 静态路由挂载
-│   ├── api/                          # API 路由控制器
-│   │   ├── endpoints.py              # 【大改】HTTP 接口 (新增双头像落盘 /upload_avatar、个人中心路由 /user)
-│   │   └── websockets.py             # WebSocket 全双工通信接口
-│   ├── core/                         # 核心配置与生命周期
-│   │   └── config.py         
-│   ├── schemas/                      # Pydantic 数据验证模型
-│   │   ├── chat_schema.py    
-│   │   └── role_schema.py            # 验证模型 (扩充了头像模式等字段)
-│   ├── services/                     # 业务逻辑服务层 
-│   │   ├── chat_service.py           # 对接 RoleplaySession 活跃内存会话
-│   │   ├── data_service.py           # 【修改】全局数据服务总线 (挂载了 user, role, auth 单例)
-│   │   ├── role_manager.py           # 【大改】角色注册表 (新增马甲名、双轨头像路径提取)
-│   │   ├── user_manager.py           # 【新增】用户个人中心全局数据管理基座
-│   │   └── auth_manager.py           # API 凭证管理中心
-│   ├── static/                       # 前端静态资源
+│   ├── main.py               # FastAPI 实例初始化与路由挂载
+│   ├── exceptions.py         # 自定义异常类
+│   ├── api/                  # API 路由控制器
+│   │   ├── endpoints.py      # 常规 HTTP 接口 (角色管理、设置、统计等)
+│   │   └── websockets.py     # WebSocket 全双工通信接口 (实时对话)
+│   ├── config/               # 配置管理模块
+│   │   ├── __init__.py
+│   │   ├── models.py         # 配置数据模型
+│   │   └── settings.py       # 全局设置与环境配置
+│   ├── schemas/              # Pydantic 数据验证模型
+│   │   ├── chat_schema.py    # WebSocket 消息输入输出模型
+│   │   └── role_schema.py    # 角色信息验证模型
+│   ├── services/             # 业务逻辑层
+│   │   ├── __init__.py
+│   │   ├── auth_manager.py   # 认证与凭证管理
+│   │   ├── chat_service.py   # 对话服务 (对接 RoleplaySession)
+│   │   ├── data_service.py   # 通用数据服务
+│   │   ├── role_manager.py   # 角色管理服务
+│   │   ├── stats_service.py  # 统计数据服务
+│   │   └── user_manager.py   # 用户管理服务
+│   ├── middleware/           # 中间件
+│   │   └── error_handler.py  # 全局异常处理器
+│   ├── static/               # 前端静态资源
 │   │   ├── css/
-│   │   │   └── style.css             # 【大改】新增启动动画、左右双抽屉、卡片渐变背景、纯手写裁剪台样式
+│   │   │   └── style.css     # 前端样式文件
 │   │   └── js/
-│   │       └── chat.js               # 【大改】二段式裁剪状态机、内存热更新引擎、Boot异步启动序列
-│   └── templates/            
-│       └── index.html                # 【大改】注入 Boot 遮罩、个人中心左侧抽屉、全屏纯 DOM 裁剪台
-├── cli/                              # 终端调试入口
+│   │       └── chat.js       # 前端交互逻辑
+│   ├── templates/            # HTML 模板页面
+│   │   └── index.html        # 前端主页面
+│   └── utils/                # 工具函数
+│       └── logger.py         # 日志工具
+├── cli/                      # 终端调试入口
 │   ├── __init__.py
-│   └── roleplay_cli.py       
-├── data/                             # 动态数据生成与本地落盘区 (运行后自动生成)
-│   ├── avatars/                      # 【新增】物理存放用户与角色裁剪后的 1:1 圆形和 4:1 长条形头像文件 (.png)
-│   ├── roles/                        # 各个角色的底层物理文件夹 (内部包含各个角色的 role_meta.json 与 ChromaDB 向量数据)
-│   ├── user_meta.json                # 【新增】用户的全局个人中心配置 (昵称、模式、头像引用)
-│   ├── roles_registry.json           # 角色注册表索引
-│   └── credentials.json              # API Key 凭证配置
-├── llm_adapters/                     # 模型请求底层适配器 (如 QwenNativeAdapter)
-├── vdb_tools/                        # 记忆数据库与底层存储组件
-│   └── hierarchical_memory_db.py     # 【大改】增强了深拷贝阻断、全量子段拦截
-├── main.py                           # 全局启动入口 (分发 Web 模式 或 CLI 模式)
-└── requirements.txt                  # Python 依赖包清单
+│   └── roleplay_cli.py       # CLI 终端交互逻辑
+├── data/                     # 数据存储目录
+│   ├── avatars/              # 头像文件存储
+│   ├── hf_models/            # Hugging Face 模型缓存
+│   ├── roles/                # 角色数据目录
+│   │   └── {role_name}/      # 单个角色的数据
+│   │       ├── role_meta.json         # 角色元数据 (设定、配置等)
+│   │       ├── conversations.json     # 对话记录索引
+│   │       ├── conversations/         # 对话上下文文件
+│   │       ├── raw_records/           # 原始对话记录 (按半年分区)
+│   │       ├── summary_L1_daily/      # 日级总结向量库 (ChromaDB)
+│   │       ├── summary_L2_weekly/     # 周级总结向量库 (ChromaDB)
+│   │       ├── summary_L3_monthly/    # 月级总结向量库 (ChromaDB)
+│   │       └── summary_L4_yearly/     # 年级总结向量库 (ChromaDB)
+│   ├── stats/                # 统计数据
+│   │   ├── model_stats.json  # 模型使用统计
+│   │   └── role_stats.json   # 角色使用统计
+│   ├── credentials.json      # API 凭证配置
+│   ├── roles_registry.json   # 角色注册表
+│   └── user_meta.json        # 用户元数据
+├── llm_adapters/             # LLM 适配器层
+│   ├── __init__.py
+│   ├── base_adapter.py       # 适配器基类 (定义统一接口)
+│   └── qwen_native_adapter.py    # 通义千问原生 API 适配器
+├── vdb_tools/                # 向量数据库与记忆管理工具
+│   └── hierarchical_memory_db.py  # 分层记忆管理器 (核心模块)
+├── logs/                     # 日志文件目录
+│   └── app.log               # 应用日志
+├── scripts/                  # 脚本工具
+│   └── migrate_role_meta.py  # 角色元数据迁移脚本
+├── tools/                    # 辅助工具
+│   ├── API_test_tool.py      # API 测试工具
+│   ├── image_token_counter.py # 图片 Token 计数工具
+│   └── test.jpg              # 测试图片
+├── main.py                   # 全局启动入口 (分发 Web 或 CLI 模式)
+├── roleplay_core.py          # 角色扮演核心会话逻辑 (RoleplaySession)
+├── requirements.txt          # Python 依赖列表
+├── pyproject.toml            # 项目配置文件 (Poetry/pip)
+├── structure                 # 本文件 - 项目结构说明
+├── test_api_latency.py       # API 延迟测试脚本
+└── test_qwen_adapter.py      # 通义千问适配器测试脚本
