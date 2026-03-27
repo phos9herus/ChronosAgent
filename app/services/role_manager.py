@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import time
+import copy
 
 
 class RoleRegistry:
@@ -26,21 +27,24 @@ class RoleRegistry:
             except Exception:
                 pass  # 解析失败则当做空字典处理
 
+        # 使用深拷贝防止修改原始字典
+        settings_copy = copy.deepcopy(new_settings)
+
         # 拦截根节点字段，防止被塞进 settings 域
         root_keys = ["system_prompt", "display_name", "avatar_mode", "avatar_circle", "avatar_bg"]
         for key in root_keys:
-            if key in new_settings:
-                role_data[key] = new_settings.pop(key)
+            if key in settings_copy:
+                role_data[key] = settings_copy.pop(key)
 
         if "settings" not in role_data:
             role_data["settings"] = {}
 
         # 修复 2：正确剥离并合并 settings 里面的二级字典，防止嵌套套娃
-        if "settings" in new_settings and isinstance(new_settings["settings"], dict):
-            role_data["settings"].update(new_settings.pop("settings"))
+        if "settings" in settings_copy and isinstance(settings_copy["settings"], dict):
+            role_data["settings"].update(settings_copy.pop("settings"))
 
-        if new_settings:  # 将剩下的零散参数也放入超参数
-            role_data["settings"].update(new_settings)
+        if settings_copy:  # 将剩下的零散参数也放入超参数
+            role_data["settings"].update(settings_copy)
 
         try:
             with open(meta_path, 'w', encoding='utf-8') as f:

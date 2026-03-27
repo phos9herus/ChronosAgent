@@ -20,7 +20,8 @@ class UserManager:
             "display_name": "User",
             "avatar_mode": "circle", # 可选: "circle" 或 "gradient"
             "avatar_circle": "",
-            "avatar_bg": ""
+            "avatar_bg": "",
+            "preferred_model": "qwen3.5-plus"
         }
         with open(self.file_path, "w", encoding="utf-8") as f:
             json.dump(default_user, f, ensure_ascii=False, indent=4)
