@@ -7,12 +7,22 @@ from contextlib import asynccontextmanager
 from app.api.websockets import router as websocket_router
 from app.api.endpoints import router as api_router
 from app.services.chat_service import chat_service
+from app.config.settings import settings
+from app.middleware.error_handler import (
+    base_app_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+    general_exception_handler
+)
+from app.exceptions import BaseAppException
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from vdb_tools.hierarchical_memory_db import get_embedding_function # 导入模型单例加载器
+from vdb_tools.hierarchical_memory_db import get_embedding_function
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,11 +47,17 @@ app = FastAPI(
 # 配置 CORS，允许前端跨域访问
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境中请替换为前端实际的域名或 IP，如 ["http://localhost:3000"]
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
 )
+
+# 注册全局异常处理器
+app.add_exception_handler(BaseAppException, base_app_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # ==========================================
 # 前端页面挂载 (Phase 2 新增)
