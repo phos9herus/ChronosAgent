@@ -5,6 +5,8 @@ import uuid
 import base64
 import copy
 import shutil
+import sys
+import signal
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -202,7 +204,7 @@ async def get_role_history(role_id: str):
     context = session.memory_manager.context_buffer
     img_dir = os.path.join(session.memory_manager.base_dir, "images")
     history = []
-    for msg in context:
+    for msg in context[1:]:
         content = msg.get("content", "")
         role = msg.get("role", "")
         images = []
@@ -251,6 +253,14 @@ async def get_role_stats_detail(role_id: str):
     if stats is None:
         raise HTTPException(status_code=404, detail=f"角色 {role_id} 无统计数据")
     return stats
+
+
+@router.get("/stats/usage")
+async def get_global_usage_stats():
+    """
+    获取全局用量统计（所有模型的总输入和总输出 Token）
+    """
+    return stats_service.get_global_usage_stats()
 
 
 @router.get("/roles/{role_id}/companion_days")
@@ -408,7 +418,7 @@ async def get_conversation_history(role_id: str, conv_id: str):
     context = session.memory_manager.context_buffer
     img_dir = os.path.join(session.memory_manager.base_dir, "images")
     history = []
-    for msg in context:
+    for msg in context[1:]:
         content = msg.get("content", "")
         role = msg.get("role", "")
         images = []
@@ -433,3 +443,30 @@ async def get_conversation_history(role_id: str, conv_id: str):
     
     session.memory_manager.switch_conversation(current_conv_id)
     return history
+
+
+@router.post("/shutdown")
+async def shutdown_service():
+    """
+    安全退出服务，触发所有会话的关闭操作
+    """
+    try:
+        print("\033[93m[系统] 收到退出请求，开始安全关闭...\033[0m")
+        chat_service.shutdown_all()
+        print("\033[92m[系统] 所有会话已安全关闭\033[0m")
+        print("\033[92m[系统] 服务即将退出...\033[0m")
+        
+        # 在后台线程中延迟退出，给API返回响应的机会
+        # 延迟3秒确保所有关闭操作完成
+        import threading
+        import time
+        def delayed_exit():
+            time.sleep(3)
+            print("\033[92m[系统] 程序自动退出\033[0m")
+            # 使用更可靠的方式退出进程，兼容Windows和Linux
+            os._exit(0)
+        threading.Thread(target=delayed_exit, daemon=True).start()
+        
+        return {"status": "success", "message": "服务正在安全关闭"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"退出失败: {str(e)}")

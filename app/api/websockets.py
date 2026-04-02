@@ -7,6 +7,7 @@ import uuid
 import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.chat_service import chat_service
+from app.utils.async_notifier import set_event_loop
 
 router = APIRouter()
 
@@ -26,7 +27,27 @@ class ConnectionManager:
             if websocket in self.active_connections:
                 self.active_connections.remove(websocket)
 
+    async def broadcast(self, message: dict):
+        """向所有活跃连接广播消息"""
+        async with self._lock:
+            for connection in self.active_connections:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
+
 manager = ConnectionManager()
+
+
+async def send_summarizing_status(is_summarizing: bool, role_id: str = None):
+    """发送总结状态消息"""
+    msg_type = "summarizing" if is_summarizing else "summarizing_done"
+    message = {
+        "msg_type": msg_type,
+        "content": "",
+        "role_id": role_id
+    }
+    await manager.broadcast(message)
 
 
 @router.websocket("/ws/chat")
@@ -99,6 +120,14 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                 # 3. 开始流式生成
                 # 注意：原生 images 依然传给 adapter，因为 Qwen API 视觉模型需要真的 base64
 
+                # 发送总结开始消息（示例）
+                await websocket.send_json({
+                    "msg_type": "summarizing",
+                    "content": "",
+                    "role_id": role_id,
+                    "conversation_id": conversation_id
+                })
+
                 generator = session.stream_chat(
                     user_input=user_input,
                     images=images,
@@ -134,6 +163,15 @@ async def websocket_chat_endpoint(websocket: WebSocket):
 
                 # 5. 发送完成信号
                 request_duration = time.time() - request_start_time
+                
+                # 发送总结完成消息
+                await websocket.send_json({
+                    "msg_type": "summarizing_done",
+                    "content": "",
+                    "role_id": role_id,
+                    "conversation_id": conversation_id
+                })
+                
                 await websocket.send_json({"msg_type": "status", "content": "[DONE]"})
 
             except Exception as e:
