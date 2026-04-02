@@ -163,7 +163,10 @@
                     <button id="open-stats-drawer" class="btn-secondary" style="width:100%;">统计信息</button>
                 </div>
             </div>
-            <div class="drawer-footer"><button id="save-user-settings" class="btn-primary">保存个人信息</button></div>
+            <div class="drawer-footer">
+                <button id="save-user-settings" class="btn-primary">保存个人信息</button>
+                <button id="btn-shutdown-service" class="btn-danger" style="margin-top: 12px; width: 100%;">退出服务</button>
+            </div>
         </div>
 
         <div id="stats-drawer" class="settings-drawer left-drawer">
@@ -181,6 +184,11 @@
                     <div class="stats-nav-item" onclick="showStatsPage('roles')">
                         
                         <span class="stats-nav-text">角色统计</span>
+                        <span class="stats-nav-arrow">›</span>
+                    </div>
+                    <div class="stats-nav-item" onclick="showStatsPage('usage')">
+                        
+                        <span class="stats-nav-text">用量统计</span>
                         <span class="stats-nav-arrow">›</span>
                     </div>
                 </div>
@@ -219,6 +227,26 @@
                         <span id="stats-role-detail-title"></span>
                     </div>
                     <div id="stats-role-detail-content"></div>
+                </div>
+                <div id="stats-usage-page" style="display:none;">
+                    <div class="stats-breadcrumb">
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('main')">统计信息</span>
+                        <span>›</span>
+                        <span>用量统计</span>
+                    </div>
+                    <div id="stats-usage-content"></div>
+                </div>
+                <div id="stats-token-detail-page" style="display:none;">
+                    <div class="stats-breadcrumb">
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('main')">统计信息</span>
+                        <span>›</span>
+                        <span class="stats-breadcrumb-link" onclick="showStatsPage('models')">模型统计</span>
+                        <span>›</span>
+                        <span class="stats-breadcrumb-link" id="stats-token-detail-back" onclick="showStatsPage('modelDetail', statsCurrentModelId)">模型</span>
+                        <span>›</span>
+                        <span>Token 详情</span>
+                    </div>
+                    <div id="stats-token-detail-content"></div>
                 </div>
             </div>
         </div>
