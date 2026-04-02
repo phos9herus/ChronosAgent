@@ -81,6 +81,31 @@ function updateConnectionStatus(isConnected) {
     }
 }
 
+let summarizingTextElement = null;
+
+function updateSummarizingStatus(isSummarizing) {
+    const light = dom.connectionStatusLight;
+    if (!light) return;
+    
+    if (isSummarizing) {
+        light.classList.add('summarizing');
+        
+        if (!summarizingTextElement) {
+            summarizingTextElement = document.createElement('span');
+            summarizingTextElement.className = 'summarizing-text';
+            summarizingTextElement.textContent = '总结上下文中...';
+            light.parentNode.appendChild(summarizingTextElement);
+        }
+    } else {
+        light.classList.remove('summarizing');
+        
+        if (summarizingTextElement) {
+            summarizingTextElement.remove();
+            summarizingTextElement = null;
+        }
+    }
+}
+
 function calculateReconnectDelay() {
     const delay = Math.min(
         MIN_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
@@ -569,14 +594,16 @@ function appendAIMessage(content, model = null, token_usage = null) {
     // 添加模型信息和token使用量
     if (model || token_usage) {
         let barContent = '';
+        const cachedValue = token_usage && token_usage.cached === '不可用' ? '不可用' : (token_usage ? (token_usage.cached || 0) : 0);
+        const cachedDisplay = cachedValue === '不可用' ? '不可用' : `${cachedValue} token`;
         if (model) {
             barContent = `<span>模型：${getModelName(model)}`;
-            if (token_usage && token_usage.total) {
-                barContent += ` | 总计消耗: ${token_usage.total} Tokens`;
+            if (token_usage) {
+                barContent += ` | 输入 ${token_usage.input || 0} token | 输出 ${token_usage.output || 0} token | 缓存 ${cachedDisplay} | 总计 ${token_usage.total || 0} token`;
             }
             barContent += '</span>';
-        } else if (token_usage && token_usage.total) {
-            barContent = `<span>总计消耗: ${token_usage.total} Tokens</span>`;
+        } else if (token_usage) {
+            barContent = `<span>输入 ${token_usage.input || 0} token | 输出 ${token_usage.output || 0} token | 缓存 ${cachedDisplay} | 总计 ${token_usage.total || 0} token</span>`;
         }
         bubbleHTML += `<div class="token-usage-bar visible">${barContent}</div>`;
     }
@@ -641,6 +668,10 @@ function initGlobalWebSocket(onReady) {
             state.activeAiThoughtText = "";
             dom.userInput.disabled = false;
             dom.sendBtn.disabled = false;
+        } else if (data.msg_type === "summarizing") {
+            updateSummarizingStatus(true);
+        } else if (data.msg_type === "summarizing_done") {
+            updateSummarizingStatus(false);
         } else if (data.msg_type === "error") {
             hideTypingIndicator();
             console.error("WebSocket Error:", data.content);
@@ -650,9 +681,11 @@ function initGlobalWebSocket(onReady) {
         } else if (data.msg_type === "usage") {
             const bar = currentAiBubble?.parentElement.querySelector('.token-usage-bar');
             if (bar) { 
-                let barContent = `<span>总计消耗: ${data.content.total} Tokens</span>`;
+                const cachedValue = data.content.cached === '不可用' ? '不可用' : (data.content.cached || 0);
+                const cachedDisplay = cachedValue === '不可用' ? '不可用' : `${cachedValue} token`;
+                let barContent = `<span>输入 ${data.content.input || 0} token | 输出 ${data.content.output || 0} token | 缓存 ${cachedDisplay} | 总计 ${data.content.total || 0} token</span>`;
                 if (data.content.model) {
-                    barContent = `<span>模型：${getModelName(data.content.model)} | 总计消耗: ${data.content.total} Tokens</span>`;
+                    barContent = `<span>模型：${getModelName(data.content.model)} | 输入 ${data.content.input || 0} token | 输出 ${data.content.output || 0} token | 缓存 ${cachedDisplay} | 总计 ${data.content.total || 0} token</span>`;
                 }
                 bar.innerHTML = barContent; 
                 bar.classList.add('visible'); 
@@ -718,7 +751,6 @@ dom.sendBtn.onclick = sendMessage;
 dom.userInput.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
 // 工具控制
-const SEARCH_ENABLED_MODELS = ['qwen3-max', 'qwen3.5-plus', 'qwen3.5-flash'];
 
 function updateThinkUI(isEnable) {
     state.enableThink = isEnable;
@@ -744,7 +776,8 @@ function toggleSearch() {
 }
 
 function updateSearchAvailability() {
-    const isAvailable = SEARCH_ENABLED_MODELS.includes(state.currentModel);
+    const currentModelInfo = state.models[state.currentModel];
+    const isAvailable = currentModelInfo && currentModelInfo.supportsWebSearch;
     dom.searchToggle.disabled = !isAvailable;
     dom.searchToggle.style.opacity = isAvailable ? '1' : '0.5';
     dom.searchToggle.style.cursor = isAvailable ? 'pointer' : 'not-allowed';
@@ -893,6 +926,36 @@ document.getElementById('save-user-settings').onclick = async () => {
     dom.leftDrawer.classList.remove('open');
     fetchUserProfile(); // 刷新侧边栏
 };
+
+// 退出服务按钮
+const btnShutdownService = document.getElementById('btn-shutdown-service');
+if (btnShutdownService) {
+    btnShutdownService.onclick = async () => {
+        if (!confirm('确定要退出服务吗？\n\n退出前将自动保存所有未总结的记忆和未存档的记录。')) {
+            return;
+        }
+        
+        // 显示等待提示
+        btnShutdownService.disabled = true;
+        btnShutdownService.innerText = '正在保存数据并退出...';
+        
+        try {
+            const res = await fetch('/api/shutdown', { method: 'POST' });
+            if (res.ok) {
+                alert('服务正在安全关闭...\n\n所有未总结的记忆和未存档的记录正在保存中。\n程序将在3秒后自动退出。');
+            } else {
+                alert('退出服务失败，请稍后重试或使用 Ctrl+C 直接退出。');
+                btnShutdownService.disabled = false;
+                btnShutdownService.innerText = '退出服务';
+            }
+        } catch (e) {
+            console.error('退出服务失败:', e);
+            alert('退出服务失败，请稍后重试或使用 Ctrl+C 直接退出。');
+            btnShutdownService.disabled = false;
+            btnShutdownService.innerText = '退出服务';
+        }
+    };
+}
 
 // ==========================================
 // 纯手工 Vanilla JS 图片裁剪引擎 (二段式状态机)
@@ -1320,8 +1383,12 @@ window.onload = runBootSequence;
 let statsCharts = {
     modelConversations: null,
     modelTokens: null,
-    roleConversations: null
+    roleConversations: null,
+    tokenInput: null,
+    tokenOutput: null
 };
+let statsCurrentModelStats = null;
+let statsCurrentModelId = null;
 
 const statsDom = {
     drawer: document.getElementById('stats-drawer'),
@@ -1332,12 +1399,16 @@ const statsDom = {
     modelDetailPage: document.getElementById('stats-model-detail-page'),
     rolesPage: document.getElementById('stats-roles-page'),
     roleDetailPage: document.getElementById('stats-role-detail-page'),
+    usagePage: document.getElementById('stats-usage-page'),
+    tokenDetailPage: document.getElementById('stats-token-detail-page'),
     modelsList: document.getElementById('stats-models-list'),
     modelDetailContent: document.getElementById('stats-model-detail-content'),
     modelDetailTitle: document.getElementById('stats-model-detail-title'),
     rolesList: document.getElementById('stats-roles-list'),
     roleDetailContent: document.getElementById('stats-role-detail-content'),
-    roleDetailTitle: document.getElementById('stats-role-detail-title')
+    roleDetailTitle: document.getElementById('stats-role-detail-title'),
+    usageContent: document.getElementById('stats-usage-content'),
+    tokenDetailContent: document.getElementById('stats-token-detail-content')
 };
 
 // 打开统计抽屉
@@ -1363,6 +1434,8 @@ function showStatsPage(page, id = null) {
     statsDom.modelDetailPage.style.display = 'none';
     statsDom.rolesPage.style.display = 'none';
     statsDom.roleDetailPage.style.display = 'none';
+    statsDom.usagePage.style.display = 'none';
+    statsDom.tokenDetailPage.style.display = 'none';
     
     destroyStatsCharts();
     
@@ -1386,6 +1459,14 @@ function showStatsPage(page, id = null) {
             statsDom.roleDetailPage.style.display = 'block';
             loadRoleDetailStats(id);
             break;
+        case 'usage':
+            statsDom.usagePage.style.display = 'block';
+            loadUsageStats();
+            break;
+        case 'tokenDetail':
+            statsDom.tokenDetailPage.style.display = 'block';
+            renderTokenDetail();
+            break;
     }
 }
 
@@ -1396,7 +1477,9 @@ function destroyStatsCharts() {
     statsCharts = {
         modelConversations: null,
         modelTokens: null,
-        roleConversations: null
+        roleConversations: null,
+        tokenInput: null,
+        tokenOutput: null
     };
 }
 
@@ -1433,6 +1516,9 @@ async function loadModelDetailStats(modelId) {
         const res = await fetch(`/api/stats/models/${modelId}`);
         const stats = await res.json();
         statsDom.modelDetailTitle.textContent = getModelName(modelId);
+        statsCurrentModelStats = stats;
+        statsCurrentModelId = modelId;
+        document.getElementById('stats-token-detail-back').textContent = getModelName(modelId);
         renderModelDetail(stats);
     } catch (e) {
         console.error('加载模型详情失败:', e);
@@ -1441,15 +1527,20 @@ async function loadModelDetailStats(modelId) {
 }
 
 function renderModelDetail(stats) {
+    const totalInput = stats.total_input_tokens || 0;
+    const totalOutput = stats.total_output_tokens || 0;
+    const totalCached = stats.total_cached_tokens || 0;
+    
     statsDom.modelDetailContent.innerHTML = `
         <div class="stats-detail-grid">
             <div class="stats-detail-card">
                 <div class="stats-detail-title">总对话次数</div>
                 <div class="stats-detail-value">${stats.total_conversations}</div>
             </div>
-            <div class="stats-detail-card">
+            <div class="stats-detail-card" style="cursor: pointer;" onclick="showStatsPage('tokenDetail')">
                 <div class="stats-detail-title">总消耗 Tokens</div>
                 <div class="stats-detail-value">${stats.total_tokens.toLocaleString()}</div>
+                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-top: 4px;">点击查看详情</div>
             </div>
         </div>
         <div class="stats-chart-container">
@@ -1611,6 +1702,131 @@ function renderRoleDetail(stats) {
                         data: stats.conversations_timeline.map(t => t.count),
                         borderColor: 'oklch(0.60 0.15 250)',
                         backgroundColor: 'rgba(96, 150, 250, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: 'rgba(255,255,255,0.7)' } },
+                        x: { ticks: { color: 'rgba(255,255,255,0.7)' } }
+                    }
+                }
+            });
+        }
+    }, 100);
+}
+
+async function loadUsageStats() {
+    try {
+        const res = await fetch('/api/stats/usage');
+        const stats = await res.json();
+        renderUsageStats(stats);
+    } catch (e) {
+        console.error('加载用量统计失败:', e);
+        statsDom.usageContent.innerHTML = '<div class="stats-empty">加载失败</div>';
+    }
+}
+
+function renderUsageStats(stats) {
+    const totalInput = stats.total_input_tokens || 0;
+    const totalOutput = stats.total_output_tokens || 0;
+    
+    statsDom.usageContent.innerHTML = `
+        <div class="stats-detail-grid">
+            <div class="stats-detail-card">
+                <div class="stats-detail-title">总输入 Tokens</div>
+                <div class="stats-detail-value">${totalInput.toLocaleString()}</div>
+            </div>
+            <div class="stats-detail-card">
+                <div class="stats-detail-title">总输出 Tokens</div>
+                <div class="stats-detail-value">${totalOutput.toLocaleString()}</div>
+            </div>
+        </div>
+        <div style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+            <div style="font-size: 0.875rem; color: rgba(255,255,255,0.6);">
+                此 token 统计是所有模型的总和
+            </div>
+        </div>
+    `;
+}
+
+function renderTokenDetail() {
+    if (!statsCurrentModelStats) {
+        statsDom.tokenDetailContent.innerHTML = '<div class="stats-empty">暂无数据</div>';
+        return;
+    }
+    
+    const stats = statsCurrentModelStats;
+    const totalInput = stats.total_input_tokens || 0;
+    const totalOutput = stats.total_output_tokens || 0;
+    const totalCached = stats.total_cached_tokens || 0;
+    
+    statsDom.tokenDetailContent.innerHTML = `
+        <div class="stats-detail-grid">
+            <div class="stats-detail-card">
+                <div class="stats-detail-title">总输入 Tokens</div>
+                <div class="stats-detail-value">${totalInput.toLocaleString()}</div>
+            </div>
+            <div class="stats-detail-card">
+                <div class="stats-detail-title">总输出 Tokens</div>
+                <div class="stats-detail-value">${totalOutput.toLocaleString()}</div>
+            </div>
+            <div class="stats-detail-card">
+                <div class="stats-detail-title">总缓存命中 Tokens</div>
+                <div class="stats-detail-value">${totalCached.toLocaleString()}</div>
+            </div>
+        </div>
+        <div class="stats-chart-container">
+            <div class="stats-chart-title">总输入 Token-时间图</div>
+            <canvas id="token-input-chart"></canvas>
+        </div>
+        <div class="stats-chart-container">
+            <div class="stats-chart-title">总输出 Token-时间图</div>
+            <canvas id="token-output-chart"></canvas>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        const inputCtx = document.getElementById('token-input-chart');
+        if (inputCtx && stats.input_tokens_timeline) {
+            statsCharts.tokenInput = new Chart(inputCtx, {
+                type: 'line',
+                data: {
+                    labels: stats.input_tokens_timeline.map(t => t.date),
+                    datasets: [{
+                        label: '输入 Token',
+                        data: stats.input_tokens_timeline.map(t => t.count),
+                        borderColor: 'oklch(0.60 0.15 250)',
+                        backgroundColor: 'rgba(96, 150, 250, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: 'rgba(255,255,255,0.7)' } },
+                        x: { ticks: { color: 'rgba(255,255,255,0.7)' } }
+                    }
+                }
+            });
+        }
+        
+        const outputCtx = document.getElementById('token-output-chart');
+        if (outputCtx && stats.output_tokens_timeline) {
+            statsCharts.tokenOutput = new Chart(outputCtx, {
+                type: 'line',
+                data: {
+                    labels: stats.output_tokens_timeline.map(t => t.date),
+                    datasets: [{
+                        label: '输出 Token',
+                        data: stats.output_tokens_timeline.map(t => t.count),
+                        borderColor: 'oklch(0.60 0.15 150)',
+                        backgroundColor: 'rgba(96, 250, 150, 0.1)',
                         fill: true,
                         tension: 0.3
                     }]
