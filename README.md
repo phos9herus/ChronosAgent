@@ -147,7 +147,7 @@ python main.py
 ## 项目结构
 
 ```
-llm-roleplay/
+project_root/
 ├── app/                      # Web 后端核心目录 (FastAPI)
 │   ├── __init__.py
 │   ├── main.py               # FastAPI 实例初始化与路由挂载
@@ -180,6 +180,7 @@ llm-roleplay/
 │   ├── templates/            # HTML 模板页面
 │   │   └── index.html        # 前端主页面
 │   └── utils/                # 工具函数
+│       ├── async_notifier.py # 异步通知工具
 │       └── logger.py         # 日志工具
 ├── data/                     # 数据存储目录
 │   ├── avatars/              # 头像文件存储
@@ -203,22 +204,22 @@ llm-roleplay/
 ├── llm_adapters/             # LLM 适配器层
 │   ├── __init__.py
 │   ├── base_adapter.py       # 适配器基类 (定义统一接口)
-│   └── qwen_native_adapter.py    # 通义千问原生 API 适配器
+│   └── qwen_native_adapter.py     # 通义千问原生 API 适配器
 ├── vdb_tools/                # 向量数据库与记忆管理工具
 │   └── hierarchical_memory_db.py  # 分层记忆管理器 (核心模块)
 ├── logs/                     # 日志文件目录
 │   └── app.log               # 应用日志
 ├── scripts/                  # 脚本工具
-│   └── migrate_role_meta.py  # 角色元数据迁移脚本
+│   
 ├── tools/                    # 辅助工具
 │   ├── API_test_tool.py      # API 测试工具
-│   ├── image_token_counter.py # 图片 Token 计数工具
+│   ├── image_token_counter.py     # 图片 Token 计数工具
 │   └── test.jpg              # 测试图片
-├── main.py                   # 全局启动入口 (分发 Web 或 CLI 模式)
+├── main.py                   # 全局启动入口 (Web 模式)
 ├── roleplay_core.py          # 角色扮演核心会话逻辑 (RoleplaySession)
 ├── requirements.txt          # Python 依赖列表
 ├── pyproject.toml            # 项目配置文件 (Poetry/pip)
-├── structure                 # 项目结构说明
+├── structure                 # 本文件 - 项目结构说明
 ├── test_api_latency.py       # API 延迟测试脚本
 └── test_qwen_adapter.py      # 通义千问适配器测试脚本
 ```
