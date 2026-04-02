@@ -89,6 +89,7 @@ class QwenNativeAdapter(BaseLLMAdapter):
             
             first_response_time = None
             response_count = 0
+            analysis_failure_status = False  
             
             for response in responses:
                 response_count += 1
@@ -125,9 +126,21 @@ class QwenNativeAdapter(BaseLLMAdapter):
 
                     usage = getattr(response, 'usage', None)
                     if usage:
+                        
+                        cached_tokens = "不可用"
+                        try:
+                            prompt_tokens_details = getattr(usage, 'prompt_tokens_details', None)
+                            if prompt_tokens_details:
+                                cached_tokens = getattr(prompt_tokens_details, 'cached_tokens', "不可用")
+                        except Exception as e:
+                            if not analysis_failure_status:
+                                logger.warning(f"[Qwen API] 解析 prompt_tokens_details 失败：{str(e)}")
+                            analysis_failure_status = True
+                        
                         yield "usage", {
                             "input": getattr(usage, 'input_tokens', 0),
                             "output": getattr(usage, 'output_tokens', 0),
+                            "cached": cached_tokens,
                             "total": getattr(usage, 'total_tokens', 0),
                             "model": model
                         }
