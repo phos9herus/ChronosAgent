@@ -60,7 +60,7 @@ project_root/
 ├── logs/                     # 日志文件目录
 │   └── app.log               # 应用日志
 ├── scripts/                  # 脚本工具
-│   └── migrate_role_meta.py  # 角色元数据迁移脚本
+│   
 ├── tools/                    # 辅助工具
 │   ├── API_test_tool.py      # API 测试工具
 │   ├── image_token_counter.py # 图片 Token 计数工具
