@@ -2,7 +2,6 @@ project_root/
 ├── app/                      # Web 后端核心目录 (FastAPI)
 │   ├── __init__.py
 │   ├── main.py               # FastAPI 实例初始化与路由挂载
-│   ├── exceptions.py         # 自定义异常类
 │   ├── api/                  # API 路由控制器
 │   │   ├── endpoints.py      # 常规 HTTP 接口 (角色管理、设置、统计等)
 │   │   └── websockets.py     # WebSocket 全双工通信接口 (实时对话)
