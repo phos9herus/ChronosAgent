@@ -142,6 +142,11 @@ body, html { margin: 0; padding: 0; height: 100vh; background-color: var(--bg-l0
     animation: connectionPulseRed 1.5s infinite;
 }
 
+.connection-status-light.summarizing {
+    background-color: #faad14;
+    animation: connectionPulseYellow 1.5s infinite;
+}
+
 @keyframes connectionPulseGreen {
     0% { box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.4); }
     70% { box-shadow: 0 0 0 6px rgba(82, 196, 26, 0); }
@@ -152,6 +157,19 @@ body, html { margin: 0; padding: 0; height: 100vh; background-color: var(--bg-l0
     0% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.4); }
     70% { box-shadow: 0 0 0 6px rgba(255, 77, 79, 0); }
     100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0); }
+}
+
+@keyframes connectionPulseYellow {
+    0% { box-shadow: 0 0 0 0 rgba(250, 173, 20, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(250, 173, 20, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(250, 173, 20, 0); }
+}
+
+.summarizing-text {
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+    margin-left: 8px;
+    white-space: nowrap;
 }
 
 textarea#user-input { flex: 1; background: transparent; border: none; color: white; resize: none; outline: none; font-size: 1rem; line-height: 1.5; padding: 6px 0; max-height: 150px; overflow-y: auto; }
