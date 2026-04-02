@@ -27,6 +27,8 @@ class RoleplaySession:
         self.role_id = role_id
         self.role_name = role_name
         self.memory_manager = HierarchicalMemoryManager(role_id=self.role_id, role_name=self.role_name)
+        
+        self.memory_manager.check_and_summarize_on_startup()
 
         self.last_interaction_time = time.time()
         self.capacity_boundary_hit_time = None
@@ -129,8 +131,8 @@ class RoleplaySession:
                 {"role": "system", "content": current_sys_prompt}
             ]
 
-            # 依次推入滑动窗口中的历史对话（短期记忆）
-            for msg in buffer:
+            # 依次推入滑动窗口中的历史对话（短期记忆），跳过第一个元数据元素
+            for msg in buffer[1:]:
                 role = "user" if msg["role"] == "user" else "assistant"
                 structured_messages.append({
                     "role": role,
@@ -191,10 +193,10 @@ class RoleplaySession:
                 self.memory_manager.save_context()
                 
                 # 记录统计数据
-                if current_token_usage and current_token_usage.get("total"):
+                if current_token_usage:
                     stats_service.record_conversation(
                         model_id=current_model or self.adapter.model,
-                        token_total=current_token_usage["total"],
+                        token_usage=current_token_usage,
                         role_id=self.role_id
                     )
         finally:
@@ -263,6 +265,8 @@ class RoleplaySession:
 
     def shutdown_and_flush(self):
         self._stop_monitor = True
+        
+        self.memory_manager.check_and_summarize_on_shutdown()
 
         needs_time_comp = self._detect_time_boundary()
         needs_cap_comp = self._detect_capacity_boundary()
@@ -278,24 +282,25 @@ class RoleplaySession:
 
     def _detect_time_boundary(self) -> bool:
         buffer = self.memory_manager.context_buffer
-        if not buffer: return False
+        if len(buffer) <= 1: return False
         current_date = datetime.now().date()
-        for m in buffer:
+        for m in buffer[1:]:
             if datetime.fromtimestamp(m["timestamp"]).date() < current_date and not m.get("daily_summarized", False):
                 return True
         return False
 
     def _detect_capacity_boundary(self) -> bool:
         buffer = self.memory_manager.context_buffer
-        current_len = sum(len(m["content"]) for m in buffer)
+        if len(buffer) <= 1: return False
+        current_len = sum(len(m["content"]) for m in buffer[1:])
         return current_len > self.memory_manager.max_context_length
 
     def _detect_old_memory_age(self) -> bool:
         buffer = self.memory_manager.context_buffer
-        if not buffer:
+        if len(buffer) <= 1:
             return False
         current_time = time.time()
-        for m in buffer:
+        for m in buffer[1:]:
             if not m.get("daily_summarized", False):
                 if current_time - m["timestamp"] >= 14400:
                     return True
@@ -303,8 +308,11 @@ class RoleplaySession:
 
     def _maintenance_task(self):
         buffer = self.memory_manager.context_buffer
+        if len(buffer) <= 1:
+            return
+            
         current_date = datetime.now().date()
-        to_compress_time = [m for m in buffer if
+        to_compress_time = [m for m in buffer[1:] if
                             datetime.fromtimestamp(m["timestamp"]).date() < current_date and not m.get(
                                 "daily_summarized", False)]
 
@@ -318,18 +326,23 @@ class RoleplaySession:
             self.memory_manager.save_context()
 
         buffer = self.memory_manager.context_buffer
-        current_len = sum(len(m["content"]) for m in buffer)
+        if len(buffer) <= 1:
+            return
+            
+        current_len = sum(len(m["content"]) for m in buffer[1:])
 
         if current_len > self.memory_manager.max_context_length:
-            split_idx = max(1, int(len(buffer) * 0.6))
-            evicted_msgs = buffer[:split_idx]
+            metadata = buffer[0]
+            messages = buffer[1:]
+            split_idx = max(1, int(len(messages) * 0.6))
+            evicted_msgs = messages[:split_idx]
 
             unsummarized_msgs = [m for m in evicted_msgs if not m.get("daily_summarized", False)]
             if unsummarized_msgs:
                 self._execute_summarization(unsummarized_msgs, tier="daily")
 
-            new_buffer = buffer[split_idx:]
-            self.memory_manager.context_buffer = new_buffer
+            new_messages = messages[split_idx:]
+            self.memory_manager.context_buffer = [metadata] + new_messages
             self.memory_manager.save_context()
 
         # ==========================================
