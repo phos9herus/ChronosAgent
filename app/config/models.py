@@ -11,29 +11,42 @@ MODEL_DETAILS = {
         "name": "Qwen3-Max",
         "description": "通义千问3旗舰版，集成Web搜索、网页信息提取和代码解释器三项工具，通过在思考过程中引入外部工具，在复杂问题上实现更高的准确率。",
         "multimodal": True,
-        "contextWindow": 131072,
+        "contextWindow": 262144,
         "supportsThinking": True,
-        "maxThinkingBudget": 131072,
+        "maxThinkingBudget": 81920,
+        "supportsWebSearch": True,
         "features": ["工具集成", "Web搜索", "代码解释器", "深度思考", "长上下文"],
         "isToolEnabled": True,
         "tools": ["Web搜索", "网页信息提取", "代码解释器"]
+    },
+    "qwen3.6-plus": {
+        "name": "Qwen3.6-Plus",
+        "description": "通义千问plus系列最新模型，支持深度思考和多模态理解，平衡性能与效果。",
+        "multimodal": True,
+        "contextWindow": 1000000,
+        "supportsThinking": True,
+        "maxThinkingBudget": 81920,
+        "supportsWebSearch": True,
+        "features": ["深度思考", "多模态", "长上下文", "代码生成"]
     },
     "qwen3.5-plus": {
         "name": "Qwen3.5-Plus",
         "description": "通义千问3.5增强版，支持深度思考和多模态理解，平衡性能与效果。",
         "multimodal": True,
-        "contextWindow": 131072,
+        "contextWindow": 1000000,
         "supportsThinking": True,
-        "maxThinkingBudget": 131072,
+        "maxThinkingBudget": 81920,
+        "supportsWebSearch": True,
         "features": ["深度思考", "多模态", "长上下文", "代码生成"]
     },
     "qwen3.5-flash": {
         "name": "Qwen3.5-Flash",
         "description": "通义千问3.5轻量版，快速响应，适合实时对话和简单任务。",
         "multimodal": True,
-        "contextWindow": 65536,
+        "contextWindow": 1000000,
         "supportsThinking": True,
-        "maxThinkingBudget": 65536,
+        "maxThinkingBudget": 81920,
+        "supportsWebSearch": True,
         "features": ["快速响应", "多模态", "轻量级", "高性价比"]
     },
     "qwq-plus": {
@@ -42,7 +55,8 @@ MODEL_DETAILS = {
         "multimodal": False,
         "contextWindow": 131072,
         "supportsThinking": False,
-        "maxThinkingBudget": 0,
+        "maxThinkingBudget": 32768,
+        "supportsWebSearch": True,
         "features": ["原生推理", "深度思考", "数学推理", "逻辑分析"],
         "isReasoningModel": True,
         "note": "原生推理模型，深度思考参数对其无效"
@@ -51,27 +65,30 @@ MODEL_DETAILS = {
         "name": "Qwen3-VL-Plus",
         "description": "通义千问3视觉语言增强版，专注于图像理解与生成，支持多模态对话。",
         "multimodal": True,
-        "contextWindow": 65536,
+        "contextWindow": 262144,
         "supportsThinking": True,
-        "maxThinkingBudget": 65536,
+        "maxThinkingBudget": 81920,
+        "supportsWebSearch": False,
         "features": ["图像理解", "图像生成", "多模态", "视觉问答", "OCR识别"]
     },
     "qwen3-vl-flash": {
         "name": "Qwen3-VL-Flash",
         "description": "通义千问3视觉语言轻量版，快速图像处理，适合实时视觉任务。",
         "multimodal": True,
-        "contextWindow": 32768,
+        "contextWindow": 262144,
         "supportsThinking": False,
-        "maxThinkingBudget": 0,
+        "maxThinkingBudget": 81920,
+        "supportsWebSearch": False,
         "features": ["快速图像处理", "多模态", "轻量级", "实时视觉"]
     },
     "qwen3.5-397b-a17b": {
         "name": "Qwen3.5-397B-A17B",
         "description": "通义千问3.5超大规模模型，397B总参数，A17B激活参数，超强性能，适合最复杂的任务。",
         "multimodal": True,
-        "contextWindow": 131072,
+        "contextWindow": 262144,
         "supportsThinking": True,
-        "maxThinkingBudget": 131072,
+        "maxThinkingBudget": 81920,
+        "supportsWebSearch": False,
         "features": ["超大规模", "MoE架构", "最强性能", "复杂推理", "多模态"]
     }
 }
