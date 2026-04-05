@@ -43,7 +43,8 @@ class Settings(BaseSettings):
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             return os.path.join(base_dir, self.HF_CACHE_DIR)
 
-    MAX_CONTEXT_LENGTH: int = 6000
+    
+    MAX_INPUT_TOKEN_SUMMARY_THRESHOLD: int = 120000
     IDLE_TIMEOUT: int = 900
     BOUNDARY_TIMEOUT: int = 1800
 
