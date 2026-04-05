@@ -31,7 +31,6 @@ class RoleplaySession:
         self.memory_manager.check_and_summarize_on_startup()
 
         self.last_interaction_time = time.time()
-        self.capacity_boundary_hit_time = None
         self.time_boundary_hit_time = None
 
         self._stop_monitor = False
@@ -216,18 +215,14 @@ class RoleplaySession:
             idle_time = current_time - self.last_interaction_time
 
             needs_time_comp = self._detect_time_boundary()
-            needs_cap_comp = self._detect_capacity_boundary()
             needs_age_comp = self._detect_old_memory_age()
 
-            if not needs_time_comp and not needs_cap_comp and not needs_age_comp:
+            if not needs_time_comp and not needs_age_comp:
                 self.time_boundary_hit_time = None
-                self.capacity_boundary_hit_time = None
                 continue
 
             if needs_time_comp and self.time_boundary_hit_time is None:
                 self.time_boundary_hit_time = current_time
-            if needs_cap_comp and self.capacity_boundary_hit_time is None:
-                self.capacity_boundary_hit_time = current_time
 
             should_execute = False
             trigger_reason = ""
@@ -235,18 +230,14 @@ class RoleplaySession:
             if idle_time >= 900:
                 should_execute = True
                 trigger_reason = f"闲置时间{idle_time:.0f}秒≥15分钟"
-            elif (self.time_boundary_hit_time and current_time - self.time_boundary_hit_time >= 1800) or \
-                    (self.capacity_boundary_hit_time and current_time - self.capacity_boundary_hit_time >= 1800):
+            elif self.time_boundary_hit_time and current_time - self.time_boundary_hit_time >= 1800:
                 should_execute = True
                 trigger_reason = "边界触发后等待≥30分钟"
             else:
                 boundary_age_exceeded = False
-                if (self.time_boundary_hit_time and current_time - self.time_boundary_hit_time >= 7200):
+                if self.time_boundary_hit_time and current_time - self.time_boundary_hit_time >= 7200:
                     boundary_age_exceeded = True
                     trigger_reason = f"时间边界存在超过2小时"
-                elif (self.capacity_boundary_hit_time and current_time - self.capacity_boundary_hit_time >= 7200):
-                    boundary_age_exceeded = True
-                    trigger_reason = f"容量边界存在超过2小时"
                 
                 if boundary_age_exceeded or needs_age_comp:
                     should_execute = True
@@ -261,7 +252,6 @@ class RoleplaySession:
                 finally:
                     self._compressing_event.clear()
                     self.time_boundary_hit_time = None
-                    self.capacity_boundary_hit_time = None
 
     def shutdown_and_flush(self):
         self._stop_monitor = True
@@ -269,9 +259,8 @@ class RoleplaySession:
         self.memory_manager.check_and_summarize_on_shutdown()
 
         needs_time_comp = self._detect_time_boundary()
-        needs_cap_comp = self._detect_capacity_boundary()
 
-        if needs_time_comp or needs_cap_comp:
+        if needs_time_comp:
             print("\n\033[90m[系统] 检测到未归档的记忆，正在执行退出前的记忆凝固整理，请稍候...\033[0m")
             self._compressing_event.set()
             try:
@@ -288,12 +277,6 @@ class RoleplaySession:
             if datetime.fromtimestamp(m["timestamp"]).date() < current_date and not m.get("daily_summarized", False):
                 return True
         return False
-
-    def _detect_capacity_boundary(self) -> bool:
-        buffer = self.memory_manager.context_buffer
-        if len(buffer) <= 1: return False
-        current_len = sum(len(m["content"]) for m in buffer[1:])
-        return current_len > self.memory_manager.max_context_length
 
     def _detect_old_memory_age(self) -> bool:
         buffer = self.memory_manager.context_buffer
@@ -323,26 +306,6 @@ class RoleplaySession:
                 self._execute_summarization(day_msgs, tier="daily")
                 for m in day_msgs:
                     m["daily_summarized"] = True
-            self.memory_manager.save_context()
-
-        buffer = self.memory_manager.context_buffer
-        if len(buffer) <= 1:
-            return
-            
-        current_len = sum(len(m["content"]) for m in buffer[1:])
-
-        if current_len > self.memory_manager.max_context_length:
-            metadata = buffer[0]
-            messages = buffer[1:]
-            split_idx = max(1, int(len(messages) * 0.6))
-            evicted_msgs = messages[:split_idx]
-
-            unsummarized_msgs = [m for m in evicted_msgs if not m.get("daily_summarized", False)]
-            if unsummarized_msgs:
-                self._execute_summarization(unsummarized_msgs, tier="daily")
-
-            new_messages = messages[split_idx:]
-            self.memory_manager.context_buffer = [metadata] + new_messages
             self.memory_manager.save_context()
 
         # ==========================================
