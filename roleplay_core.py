@@ -100,7 +100,7 @@ class RoleplaySession:
             # ==========================================
             if depth_recall_mode:
                 self.memory_manager.set_depth_recall_mode(depth_recall_mode)
-            long_term_memories = self.memory_manager.retrieve_with_depth_mode(query=user_input, top_k=5)
+            long_term_memories = self.memory_manager.retrieve_with_depth_mode(query=user_input, top_k=10)
 
             buffer = self.memory_manager.context_buffer
 
