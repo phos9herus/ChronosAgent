@@ -84,6 +84,20 @@ HF_CACHE_DIR = _get_hf_cache_dir()
 os.environ["HF_HOME"] = HF_CACHE_DIR
 os.environ["TRANSFORMERS_CACHE"] = HF_CACHE_DIR
 
+def _get_max_input_token_summary_threshold():
+    """从环境变量或配置文件获取输入token总结阈值"""
+    try:
+        from app.config.settings import settings
+        threshold = getattr(settings, 'MAX_INPUT_TOKEN_SUMMARY_THRESHOLD', None)
+        if threshold is not None:
+            return threshold
+    except Exception:
+        pass
+    
+    return 20000
+
+MAX_INPUT_TOKEN_SUMMARY_THRESHOLD = _get_max_input_token_summary_threshold()
+
 # 抑制 ChromaDB 的 "Could not reconstruct embedding function" 警告
 warnings.filterwarnings("ignore", message="Could not reconstruct embedding function")
 
@@ -274,10 +288,9 @@ def _download_model_with_fallback(model_name: str):
 
 
 class HierarchicalMemoryManager:
-    def __init__(self, role_id: str, role_name: str, max_context_length: int = 6000,
+    def __init__(self, role_id: str, role_name: str,
                  initial_api_settings: dict = None, system_prompt: str = "", strict_mode: bool = False):
         self.role_name = role_name
-        self.max_context_length = max_context_length
         self.base_dir = os.path.join(PROJECT_ROOT, "data", "roles", self.role_name)
 
         self.paths = {
@@ -1217,7 +1230,7 @@ class HierarchicalMemoryManager:
                 self.context_buffer[0].get("type") == "metadata"):
                 self.context_buffer[0]["max_input_token"] = self._calculate_max_input_token(self.context_buffer[1:])
                 
-                if self.context_buffer[0]["max_input_token"] > 20000:
+                if self.context_buffer[0]["max_input_token"] > MAX_INPUT_TOKEN_SUMMARY_THRESHOLD:
                     self._execute_context_summary()
             
             self.save_context()
