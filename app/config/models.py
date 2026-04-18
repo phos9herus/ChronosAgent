@@ -49,18 +49,6 @@ MODEL_DETAILS = {
         "supportsWebSearch": True,
         "features": ["快速响应", "多模态", "轻量级", "高性价比"]
     },
-    "qwq-plus": {
-        "name": "QwQ-Plus",
-        "description": "QwQ原生推理模型，专为深度推理任务设计，深度思考参数对其无效，模型本身即具备强大的推理能力。",
-        "multimodal": False,
-        "contextWindow": 131072,
-        "supportsThinking": False,
-        "maxThinkingBudget": 32768,
-        "supportsWebSearch": True,
-        "features": ["原生推理", "深度思考", "数学推理", "逻辑分析"],
-        "isReasoningModel": True,
-        "note": "原生推理模型，深度思考参数对其无效"
-    },
     "qwen3-vl-plus": {
         "name": "Qwen3-VL-Plus",
         "description": "通义千问3视觉语言增强版，专注于图像理解与生成，支持多模态对话。",

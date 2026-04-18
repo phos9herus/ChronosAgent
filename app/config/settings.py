@@ -45,6 +45,7 @@ class Settings(BaseSettings):
 
     
     MAX_INPUT_TOKEN_SUMMARY_THRESHOLD: int = 120000
+    RETRIEVE_DEPTH_MODE_TOP_K: int = 10
     IDLE_TIMEOUT: int = 900
     BOUNDARY_TIMEOUT: int = 1800
 
