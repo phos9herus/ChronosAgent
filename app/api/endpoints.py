@@ -7,14 +7,21 @@ import copy
 import shutil
 import sys
 import signal
+import json
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from app.services.data_service import data_service
 from app.services.chat_service import chat_service
 from app.services.stats_service import stats_service
 from app.schemas.role_schema import RoleCreateRequest
+from app.schemas.knowledge_schema import (
+    KnowledgeBaseCreate, KnowledgeBaseUpdate,
+    KnowledgeBaseResponse, KnowledgeBaseListItem,
+    DocumentInfo, DocumentUploadResponse, DocumentDetailResponse
+)
+from app.services.knowledge_service import knowledge_service
 from vdb_tools.hierarchical_memory_db import HierarchicalMemoryManager
 from app.config.models import get_all_model_details, is_valid_model
 
@@ -51,7 +58,7 @@ class ConversationUpdateRequest(BaseModel):
 class DepthRecallModeUpdate(BaseModel):
     depth_recall_mode: str
 
-# 【核心修改】：支持两段式头像的上传接收
+# 支持两段式头像的上传接收
 class AvatarUploadRequest(BaseModel):
     target_type: str  # "user" 或 "role"
     role_id: Optional[str] = None
@@ -470,3 +477,181 @@ async def shutdown_service():
         return {"status": "success", "message": "服务正在安全关闭"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"退出失败: {str(e)}")
+
+@router.get("/knowledge-bases", response_model=List[KnowledgeBaseListItem])
+async def list_knowledge_bases():
+    """获取所有知识库摘要列表"""
+    try:
+        kbs = knowledge_service.list_knowledge_bases()
+        return kbs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/knowledge-bases", response_model=KnowledgeBaseResponse, status_code=201)
+async def create_knowledge_base(req: KnowledgeBaseCreate):
+    """创建新知识库"""
+    try:
+        kb = knowledge_service.create_knowledge_base(
+            name=req.name,
+            description=req.description or ""
+        )
+        return kb
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/knowledge-bases/{kb_id}", response_model=KnowledgeBaseResponse)
+async def get_knowledge_base(kb_id: str):
+    """获取指定知识库详情"""
+    try:
+        kb = knowledge_service.get_knowledge_base(kb_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        return kb
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/knowledge-bases/{kb_id}", response_model=KnowledgeBaseResponse)
+async def update_knowledge_base(kb_id: str, req: KnowledgeBaseUpdate):
+    """更新知识库元数据"""
+    try:
+        kb = knowledge_service.update_knowledge_base(
+            kb_id=kb_id,
+            name=req.name,
+            description=req.description
+        )
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        return kb
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/knowledge-bases/{kb_id}")
+async def delete_knowledge_base(kb_id: str):
+    """删除知识库（含所有文档）"""
+    try:
+        success = knowledge_service.delete_knowledge_base(kb_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        return {"message": "知识库已删除", "kb_id": kb_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/knowledge-bases/{kb_id}/documents", response_model=DocumentUploadResponse)
+async def upload_document_to_kb(
+    kb_id: str,
+    file: UploadFile = File(...),
+):
+    """
+    上传文档到指定知识库
+
+    支持格式: .docx, .xlsx, .pdf
+    最大文件大小: 50MB
+    上传后自动触发文档解析
+    """
+    allowed_extensions = {'.docx', '.xlsx', '.pdf'}
+    filename = file.filename or 'unnamed'
+    ext = os.path.splitext(filename)[1].lower()
+
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件格式: {ext}，仅支持 {', '.join(allowed_extensions)}"
+        )
+
+    MAX_FILE_SIZE = 50 * 1024 * 1024
+    content = await file.read()
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"文件过大：{len(content) / 1024 / 1024:.1f}MB，最大允许 50MB"
+        )
+
+    try:
+        result = knowledge_service.upload_document(
+            kb_id=kb_id,
+            original_filename=filename,
+            file_content=content,
+            file_type=ext.replace('.', '')
+        )
+
+        return DocumentUploadResponse(
+            doc_id=result['doc_id'],
+            kb_id=result['kb_id'],
+            filename=result['filename'],
+            file_type=result['file_type'],
+            file_size=result.get('file_size', len(content)),
+            uploaded_at=result['uploaded_at'],
+            parsed_status=result.get('parsed_status', 'success'),
+            parsed_message=result.get('parsed_message')
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+
+@router.get("/knowledge-bases/{kb_id}/documents", response_model=List[DocumentInfo])
+async def list_kb_documents(kb_id: str):
+    """获取指定知识库的文档列表"""
+    try:
+        kb = knowledge_service.get_knowledge_base(kb_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+
+        return kb.get('documents', [])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/knowledge-bases/{kb_id}/documents/{doc_id}", response_model=DocumentDetailResponse)
+async def get_document_detail(kb_id: str, doc_id: str):
+    """获取文档详情和解析后的结构化数据"""
+    try:
+        kb = knowledge_service.get_knowledge_base(kb_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+
+        doc_info = next((d for d in kb['documents'] if d['doc_id'] == doc_id), None)
+        if not doc_info:
+            raise HTTPException(status_code=404, detail="文档不存在")
+
+        parsed_data = None
+        kb_dir = os.path.join(knowledge_service.base_dir, kb_id)
+        parsed_path = os.path.join(kb_dir, 'documents', f'{doc_id}_parsed.json')
+
+        if os.path.exists(parsed_path):
+            with open(parsed_path, 'r', encoding='utf-8') as f:
+                parsed_data = json.load(f)
+
+        return DocumentDetailResponse(**doc_info, parsed_data=parsed_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/knowledge-bases/{kb_id}/documents/{doc_id}")
+async def delete_document_from_kb(kb_id: str, doc_id: str):
+    """删除知识库中的指定文档（包括原始文件和解析数据）"""
+    try:
+        success = knowledge_service.delete_document(kb_id, doc_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="文档或知识库不存在")
+
+        return {"message": "文档已删除", "doc_id": doc_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

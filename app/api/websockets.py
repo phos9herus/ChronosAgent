@@ -79,6 +79,12 @@ async def websocket_chat_endpoint(websocket: WebSocket):
             conversation_id = data.get("conversation_id", None)  # 新增：对话ID参数
             depth_recall_mode = data.get("depth_recall_mode", None)  # 新增：深度回忆模式参数
 
+            # 处理知识库引用（Task 12）
+            if data.get('knowledge_base_ref'):
+                kb_ref = data['knowledge_base_ref']
+                ref_text = f"\n[来自知识库: {kb_ref['kb_name']} - {kb_ref['doc_name']}]\n{kb_ref['selected_text']}\n[/知识库引用]\n"
+                user_input = (user_input or '') + ref_text
+
             if not role_id:
                 await websocket.send_json({"msg_type": "error", "content": "缺失 role_id"})
                 continue
