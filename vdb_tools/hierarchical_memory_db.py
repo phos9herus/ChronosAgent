@@ -7,7 +7,7 @@ import threading
 import copy
 import logging
 import warnings
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import chromadb
 from contextlib import contextmanager
@@ -318,7 +318,7 @@ class HierarchicalMemoryManager:
             default_settings = {
                 "temperature": 1.0,
                 "top_p": 0.8,
-                "top_k": 10,
+                "top_k": 20,
                 "presence_penalty": 0.0,
                 "repetition_penalty": 1.1,
                 "enable_think": True,
@@ -778,7 +778,7 @@ class HierarchicalMemoryManager:
             collection.delete(ids=ids_to_delete_count)
             logger.debug(f"[MemoryDB] {tier}层删除 {len(ids_to_delete_count)} 条超过数量限制的记录")
 
-    def retrieve_with_time_routing(self, query: str, top_k: int = 3) -> List[str]:
+    def retrieve_with_time_routing(self, query: str, top_k: int = 10) -> List[str]:
         current_time = time.time()
         results = []
         
@@ -1044,7 +1044,7 @@ class HierarchicalMemoryManager:
         logger.debug(f"[MemoryDB] 从所有对话 context 中检索到 {len(results)} 条结果")
         return results
 
-    def retrieve_with_depth_mode(self, query: str, top_k: int = 3) -> List[str]:
+    def retrieve_with_depth_mode(self, query: str, top_k: int = 10) -> List[str]:
         """
         根据深度回忆模式选择不同的检索策略
         
@@ -1617,7 +1617,7 @@ class HierarchicalMemoryManager:
         
         dt = datetime.fromtimestamp(first_timestamp)
         days_to_monday = dt.weekday()
-        week_start = datetime(dt.year, dt.month, dt.day) - datetime.timedelta(days=days_to_monday)
+        week_start = datetime(dt.year, dt.month, dt.day) - timedelta(days=days_to_monday)
         week_start_timestamp = week_start.timestamp()
         
         weekly_summary = self._generate_summary_from_texts(texts, "weekly")
