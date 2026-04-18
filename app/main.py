@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     """
     print("Web 服务正在启动...")
     print(">>> 正在预加载核心嵌入模型与向量空间，请稍候...")
-    get_embedding_function() # 【核心触发】：强行唤醒并加载 1.5GB 的大模型
+    get_embedding_function() # 强行唤醒并加载 1.5GB 的大模型
     print(">>> 模型预加载完成，神经引擎已就绪！")
     yield
     print("Web 服务正在关闭，执行安全清理...")
@@ -74,7 +74,7 @@ async def get_web_ui(request: Request):
     """
     返回主 Web UI 界面
     """
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(request, "index.html")
 # ==========================================
 
 # 挂载路由
