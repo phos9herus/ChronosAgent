@@ -6,7 +6,7 @@ import threading
 from datetime import datetime
 from typing import Generator, Tuple
 import copy
-
+from app.config.settings import Settings
 from llm_adapters.base_adapter import BaseLLMAdapter
 from vdb_tools.hierarchical_memory_db import HierarchicalMemoryManager
 from app.services.stats_service import stats_service
@@ -99,7 +99,8 @@ class RoleplaySession:
             # ==========================================
             if depth_recall_mode:
                 self.memory_manager.set_depth_recall_mode(depth_recall_mode)
-            long_term_memories = self.memory_manager.retrieve_with_depth_mode(query=user_input, top_k=10)
+            retrieve_top_k = getattr(Settings, "RETRIEVE_DEPTH_MODE_TOP_K", 10)
+            long_term_memories = self.memory_manager.retrieve_with_depth_mode(query=user_input, top_k=retrieve_top_k)
 
             buffer = self.memory_manager.context_buffer
 
@@ -246,6 +247,36 @@ class RoleplaySession:
 
             if should_execute:
                 print(f"\033[90m[系统] 触发记忆总结：{trigger_reason}\033[0m")
+                
+                buffer = self.memory_manager.context_buffer
+                if len(buffer) > 1:
+                    current_date = datetime.now().date()
+                    current_time = time.time()
+                    
+                    pending_messages = []
+                    seen_msg_ids = set()
+                    
+                    for m in buffer[1:]:
+                        msg_id = m.get("msg_id", "")
+                        if msg_id and msg_id not in seen_msg_ids:
+                            is_time_boundary = (datetime.fromtimestamp(m["timestamp"]).date() < current_date 
+                                              and not m.get("daily_summarized", False))
+                            is_old_age = (not m.get("daily_summarized", False) 
+                                        and current_time - m["timestamp"] >= 14400)
+                            
+                            if is_time_boundary or is_old_age:
+                                pending_messages.append(m)
+                                seen_msg_ids.add(msg_id)
+                    
+                    if pending_messages:
+                        print(f"\033[90m[系统] 待总结消息共 {len(pending_messages)} 条：\033[0m")
+                        for idx, msg in enumerate(pending_messages, 1):
+                            msg_id = msg.get("msg_id", "unknown")
+                            content = msg.get("content", "")
+                            preview = content[:10] if len(content) > 10 else content
+                            role = msg.get("role", "unknown")
+                            print(f"\033[90m  [{idx}] {role} - {msg_id}: {preview}{'...' if len(content) > 10 else ''}\033[0m")
+                
                 self._compressing_event.set()
                 try:
                     self._maintenance_task()
