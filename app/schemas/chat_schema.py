@@ -1,5 +1,14 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+
+class KnowledgeBaseRef(BaseModel):
+    """知识库引用"""
+    kb_id: str
+    kb_name: str
+    doc_id: str
+    doc_name: str
+    selected_text: str
+    selected_length: int
 
 class ChatRequest(BaseModel):
     user_input: str
@@ -7,6 +16,7 @@ class ChatRequest(BaseModel):
     images: Optional[List[str]] = Field(default_factory=list)
     enable_think: bool = False
     force_deep_recall: bool = False
+    knowledge_base_ref: Optional[KnowledgeBaseRef] = None
 
 class ChatStreamResponse(BaseModel):
     msg_type: str  # "status", "thought", "answer", "error"
