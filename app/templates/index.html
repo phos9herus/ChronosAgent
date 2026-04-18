@@ -24,18 +24,40 @@
 
     <div class="app-container">
         <div class="sidebar">
-            <h3 class="sidebar-title">角色列表</h3>
-            <div id="btn-create-role" class="role-item create-role-btn">
-                <span class="plus-icon">+</span> 新建角色
-            </div>
-            <div id="role-list" class="flex-list"></div>
+            <div class="accordion-container">
+                <div id="section-roles" class="accordion-section active">
+                    <div class="accordion-header" onclick="toggleAccordion('section-roles')">
+                        <span class="accordion-title">角色列表</span>
+                        <span class="accordion-arrow">▼</span>
+                    </div>
+                    <div class="accordion-body">
+                        <div id="btn-create-role" class="role-item create-role-btn">
+                            <span class="plus-icon">+</span> 新建角色
+                        </div>
+                        <div id="role-list" class="flex-list"></div>
 
-            <div id="delete-mode-hint" class="delete-mode-hint" style="display: none;">
-                删除模式已激活，点击角色进行删除
-            </div>
+                        <div id="delete-mode-hint" class="delete-mode-hint" style="display: none;">
+                            删除模式已激活，点击角色进行删除
+                        </div>
 
-            <div id="btn-delete-role-mode" class="delete-role-btn">
-                删除角色
+                        <div id="btn-delete-role-mode" class="delete-role-btn">
+                            删除角色
+                        </div>
+                    </div>
+                </div>
+
+                <div id="section-kb" class="accordion-section">
+                    <div class="accordion-header" onclick="toggleAccordion('section-kb')">
+                        <span class="accordion-title">知识库</span>
+                        <span class="accordion-arrow">▶</span>
+                    </div>
+                    <div class="accordion-body">
+                        <div id="btn-create-kb" class="role-item create-kb-btn">
+                            <span class="plus-icon">+</span> 新建知识库
+                        </div>
+                        <div id="kb-list" class="flex-list"></div>
+                    </div>
+                </div>
             </div>
 
             <div id="conversation-menu-container" class="conversation-menu" style="display: none;">
@@ -71,13 +93,35 @@
                 <div class="system-hint">请选择角色开始对话</div>
             </div>
             <div class="chat-input-area">
-                <div class="input-wrapper">
+            <div class="bubble-toggle-wrapper" id="bubble-toggle-wrapper">
+                <div id="input-bubble" class="input-bubble" style="display: none;">
+                    <textarea id="bubble-textarea" rows="1" placeholder="输入消息..."></textarea>
+                </div>
+                <div class="bubble-toggle" id="bubble-toggle" onclick="toggleBubble()" title="展开多行输入">
+                    <svg viewBox="0 0 24 24" width="14" height="14"><polyline points="18 15 12 9 6 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+            </div>
+            <div class="input-wrapper" id="input-wrapper">
                     <div id="preview-area" class="preview-container"></div>
                     <div class="toolbar">
                         <div class="toolbar-left">
-                            <label class="plus-btn-label" title="上传图片">
-                                + <input type="file" id="file-input" multiple accept="image/*" style="display:none">
-                            </label>
+                            <div class="upload-dropdown" id="upload-dropdown">
+                                <button class="plus-btn-trigger" id="upload-trigger" title="上传内容">+</button>
+                                <div class="dropdown-menu" id="upload-menu" style="display: none;">
+                                    <div class="dropdown-item" onclick="triggerImageUpload()">
+                                        <span class="dropdown-icon"></span>
+                                        <span class="dropdown-text">上传图片</span>
+                                        <span class="dropdown-hint">PNG, JPG, GIF</span>
+                                    </div>
+                                    <div class="dropdown-item" onclick="openKnowledgeBaseSelector()">
+                                        <span class="dropdown-icon"></span>
+                                        <span class="dropdown-text">知识库文档</span>
+                                        <span class="dropdown-hint">从知识库选择</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 保留原始 file input 但隐藏 -->
+                            <input type="file" id="file-input" multiple accept="image/*" style="display:none">
                         </div>
                         <textarea id="user-input" placeholder="输入消息..." rows="1" disabled></textarea>
                         <select id="model-select" class="model-select" title="选择模型">
@@ -94,6 +138,174 @@
                         <button id="depth-recall-btn" class="depth-recall-off">深度回忆: 关</button>
                         <button id="send-btn" class="send-btn" disabled>发送</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 知识库管理抽屉 -->
+        <div id="kb-drawer" class="settings-drawer right-drawer">
+            <div class="settings-header">
+                <span class="drawer-title">知识库管理</span>
+                <button class="close-x-btn" onclick="closeKbDrawer()">&times;</button>
+            </div>
+
+            <!-- 知识库列表视图 -->
+            <div class="drawer-scroll-body" id="kb-main-view">
+                <!-- 统计卡片 -->
+                <div class="kb-overview-stats" style="display: flex; gap: 12px; margin-bottom: 20px;">
+                    <div class="stat-card" style="flex:1; background: var(--bg-l2); padding: 16px; border-radius: 8px; text-align: center;">
+                        <div class="stat-number" id="kb-total-count" style="font-size: 24px; font-weight: bold; color: var(--text-primary);">0</div>
+                        <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">知识库总数</div>
+                    </div>
+                    <div class="stat-card" style="flex:1; background: var(--bg-l2); padding: 16px; border-radius: 8px; text-align: center;">
+                        <div class="stat-number" id="kb-doc-total-count" style="font-size: 24px; font-weight: bold; color: var(--text-primary);">0</div>
+                        <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">文档总数</div>
+                    </div>
+                </div>
+
+                <!-- 操作栏 -->
+                <div class="kb-action-bar" style="margin-bottom: 20px;">
+                    <button id="btn-create-kb-drawer" class="btn-primary" style="width:100%; padding: 10px;">+ 新建知识库</button>
+                </div>
+
+                <!-- 知识库列表容器 -->
+                <div class="kb-list-container" id="kb-management-list">
+                </div>
+
+                <!-- 空状态提示 -->
+                <div id="kb-empty-hint" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+                    <div style="font-size: 48px; margin-bottom: 12px;">📚</div>
+                    <div>暂无知识库</div>
+                    <div style="font-size: 12px; margin-top: 4px;">点击上方按钮创建你的第一个知识库</div>
+                </div>
+            </div>
+
+            <!-- 知识库详情视图（初始隐藏） -->
+            <div class="drawer-scroll-body" id="kb-detail-view" style="display: none;">
+                <!-- 返回按钮 -->
+                <div style="margin-bottom: 16px;">
+                    <button class="btn-secondary" onclick="backToKbList()" style="padding: 6px 12px; font-size: 13px;">← 返回列表</button>
+                    <h3 id="detail-kb-name" style="display: inline-block; margin-left: 12px; margin-top: 0;"></h3>
+                </div>
+
+                <!-- 设置区域 -->
+                <div class="kb-settings-section" style="margin-bottom: 24px;">
+                    <h4 style="font-size: 14px; color: var(--text-primary); margin-bottom: 12px;">基本设置</h4>
+
+                    <div class="setting-item" style="margin-bottom: 12px;">
+                        <label>知识库名称</label>
+                        <input type="text" id="edit-kb-name-input" placeholder="输入名称">
+                    </div>
+
+                    <div class="setting-item" style="margin-bottom: 12px;">
+                        <label>描述（可选）</label>
+                        <textarea id="edit-kb-desc-input" rows="3" placeholder="输入描述"></textarea>
+                    </div>
+
+                    <button class="btn-secondary" onclick="saveKbSettings()" style="padding: 8px 16px;">保存设置</button>
+                </div>
+
+                <!-- 文档管理区域 -->
+                <div class="kb-documents-section">
+                    <h4 style="font-size: 14px; color: var(--text-primary); margin-bottom: 12px;">
+                        文档列表 (<span id="detail-doc-count">0</span>)
+                    </h4>
+
+                    <!-- 上传区域 -->
+                    <div class="upload-doc-area" style="margin-bottom: 16px;">
+                        <div
+                            id="kb-upload-dropzone"
+                            class="upload-dropzone"
+                            onclick="document.getElementById('kb-file-input').click()"
+                            style="
+                                border: 2px dashed var(--border-color);
+                                border-radius: 8px;
+                                padding: 24px;
+                                text-align: center;
+                                cursor: pointer;
+                                transition: all 0.15s;
+                                background: var(--bg-l2);
+                            "
+                        >
+                            <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
+                            <div style="color: var(--text-primary); font-size: 14px; margin-bottom: 4px;">点击或拖拽上传文档</div>
+                            <div style="color: var(--text-secondary); font-size: 12px;">支持 DOCX, XLSX, PDF</div>
+                            <input type="file" id="kb-file-input" multiple accept=".docx,.xlsx,.pdf" style="display:none">
+                        </div>
+                    </div>
+
+                    <!-- 文档列表 -->
+                    <div class="kb-doc-list" id="kb-detail-doc-list">
+                        <!-- 动态渲染的文档项 -->
+                    </div>
+
+                    <!-- 空状态提示 -->
+                    <div id="kb-doc-empty-hint" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                        <div style="font-size: 36px; margin-bottom: 8px;">📄</div>
+                        <div>暂无文档</div>
+                        <div style="font-size: 11px; margin-top: 4px;">上传你的第一个文档开始使用</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="drawer-footer">
+                <button class="btn-secondary" style="width:100%;" onclick="closeKbDrawer()">关闭</button>
+            </div>
+        </div>
+
+        <!-- 新建知识库对话框 -->
+        <div id="create-kb-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeCreateKbModal()">
+            <div class="modal-content" style="max-width: 400px;">
+                <div class="modal-header" style="text-align:center; padding-top:16px; padding-bottom:12px;">
+                    <h3>新建知识库</h3>
+                </div>
+                <div style="padding: 20px;">
+                    <div class="setting-item" style="margin-bottom: 16px;">
+                        <label>知识库名称 <span style="color:red;">*</span></label>
+                        <input type="text" id="new-kb-name" placeholder="输入知识库名称" maxlength="100">
+                    </div>
+                    <div class="setting-item" style="margin-bottom: 16px;">
+                        <label>描述（可选）</label>
+                        <textarea id="new-kb-desc" placeholder="输入知识库描述（可选）" rows="3" maxlength="500"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 16px 20px 20px; display:flex; gap:10px; justify-content:flex-end;">
+                    <button class="btn-secondary" onclick="closeCreateKbModal()">取消</button>
+                    <button class="btn-primary" id="btn-confirm-create-kb" onclick="confirmCreateKb()">创建</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 删除确认对话框 -->
+        <div id="delete-kb-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeDeleteKbModal()">
+            <div class="modal-content" style="max-width: 400px;">
+                <div class="modal-header" style="padding:16px 20px 12px; display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; font-size:16px;">删除确认</h3>
+                    <button onclick="closeDeleteKbModal()" style="background:none; border:none; color:var(--text-secondary); font-size:22px; cursor:pointer; line-height:1; padding:0 4px; border-radius:4px;">&times;</button>
+                </div>
+                <div style="padding: 20px;">
+                    <p id="delete-kb-message">确定要删除这个知识库吗？此操作将同时删除该知识库下的所有文档，且无法恢复。</p>
+                </div>
+                <div class="modal-footer" style="padding: 16px 20px 20px; display:flex; gap:10px; justify-content:space-between;">
+                    <button class="btn-secondary" onclick="closeDeleteKbModal()">取消</button>
+                    <button class="btn-danger" id="btn-confirm-delete-kb" onclick="confirmDeleteKb()">确认删除</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 文档删除确认对话框 -->
+        <div id="delete-doc-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeDeleteDocModal()">
+            <div class="modal-content" style="max-width: 400px;">
+                <div class="modal-header" style="padding:16px 20px 12px; display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; font-size:16px;">删除确认</h3>
+                    <button onclick="closeDeleteDocModal()" style="background:none; border:none; color:var(--text-secondary); font-size:22px; cursor:pointer; line-height:1; padding:0 4px; border-radius:4px;">&times;</button>
+                </div>
+                <div style="padding: 20px;">
+                    <p id="delete-doc-message">确定要删除该文档吗？此操作无法恢复。</p>
+                </div>
+                <div class="modal-footer" style="padding: 16px 20px 20px; display:flex; gap:10px; justify-content:space-between;">
+                    <button class="btn-secondary" onclick="closeDeleteDocModal()">取消</button>
+                    <button class="btn-danger" id="btn-confirm-delete-doc" onclick="confirmDeleteDoc()">确认删除</button>
                 </div>
             </div>
         </div>
@@ -384,5 +596,79 @@
     </div>
 
     <script src="/static/js/chat.js"></script>
+
+    <!-- 知识库文档选择器弹窗 -->
+    <div class="kb-document-selector-modal" id="kb-doc-selector" style="display:none;">
+        <div class="modal-overlay" onclick="closeKbDocSelector()"></div>
+        <div class="modal-content kb-doc-selector-content" style="max-width:1400px; max-height:85vh; display:flex; flex-direction:column;">
+            <!-- 头部 -->
+            <div class="modal-header" style="padding:16px 20px 12px; display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; font-size:16px;">选择知识库文档</h3>
+                <button class="close-btn" onclick="closeKbDocSelector()" style="background:none; border:none; color:var(--text-secondary); font-size:22px; cursor:pointer; line-height:1; padding:0 4px; border-radius:4px;">&times;</button>
+            </div>
+
+            <!-- 主体区域 -->
+            <div style="flex:1; overflow:hidden; display:flex;">
+                <!-- 左侧：知识库和文档列表 -->
+                <div style="width:200px; min-width:200px; border-right:1px solid var(--border-color); display:flex; flex-direction:column; background:var(--bg-l1);">
+                    <!-- 知识库标签页 -->
+                    <div style="padding:12px; border-bottom:1px solid var(--border-color);">
+                        <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">选择知识库</div>
+                        <div id="kb-selector-tabs" style="display:flex; flex-wrap:wrap; gap:6px; max-height:80px; overflow-y:auto;">
+                            <!-- 动态渲染的知识库标签 -->
+                        </div>
+                    </div>
+
+                    <!-- 文档列表 -->
+                    <div style="flex:1; overflow-y:auto; padding:12px;">
+                        <div id="kb-selector-doc-list">
+                            <!-- 动态渲染的文档项 -->
+                        </div>
+                        <div id="kb-selector-empty-hint" style="text-align:center; padding:20px; color:var(--text-secondary); display:none;">
+                            该知识库暂无文档
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：文档预览区 -->
+                <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+                    <!-- 预览工具栏 -->
+                    <div style="padding:10px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; background:var(--bg-l2);">
+                        <span id="kb-preview-title" style="font-weight:600; color:var(--text-primary); font-size:14px;">文档预览</span>
+                        <button class="btn-secondary" onclick="toggleDocPreviewFullscreen()" style="padding:4px 10px; font-size:12px;">全屏</button>
+                    </div>
+
+                    <!-- 预览内容区 -->
+                    <div id="kb-doc-preview" style="flex:1; overflow-y:auto; padding:20px; line-height:1.7; color:var(--text-primary); font-size:14px;">
+                        <div style="text-align:center; color:var(--text-secondary); padding:40px;">
+                            请从左侧选择一个文档
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部操作栏 -->
+            <div style="padding:16px; border-top:1px solid var(--border-color); background:var(--bg-l2); display:flex; justify-content:space-between; align-items:center; border-radius:0 0 12px 12px;">
+                <div class="selection-info" style="font-size:13px; color:var(--text-secondary);">
+                    已选择文本: <strong id="selected-text-length" style="color:var(--primary-color);">0</strong> 字符
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-secondary" onclick="clearDocSelection()" style="padding:8px 16px;">清除选择</button>
+                    <button class="btn-primary" onclick="confirmDocumentSelection()" id="confirm-doc-btn" disabled style="padding:8px 20px;">确认引用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全屏预览弹窗 -->
+    <div id="kb-fullscreen-preview" class="modal-overlay" style="display:none;" onclick="if(event.target===this)toggleDocPreviewFullscreen()">
+        <div style="width:90vw; height:90vh; background:var(--bg-l1); border-radius:12px; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,0.5);">
+            <div style="padding:16px 24px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+                <span id="fullscreen-preview-title" style="font-weight:600;"></span>
+                <button class="close-btn" onclick="toggleDocPreviewFullscreen()">&times;</button>
+            </div>
+            <div id="kb-fullscreen-content" style="flex:1; overflow:auto; padding:30px; line-height:1.8; font-size:15px;"></div>
+        </div>
+    </div>
 </body>
 </html>
