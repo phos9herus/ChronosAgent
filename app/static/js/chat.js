@@ -52,8 +52,13 @@ const dom = {
     deleteModeHint: document.getElementById('delete-mode-hint'),
     deleteRoleModal1: document.getElementById('delete-role-modal-1'),
     deleteRoleModal2: document.getElementById('delete-role-modal-2'),
-    deleteConversationModal: document.getElementById('delete-conversation-modal')
+    deleteConversationModal: document.getElementById('delete-conversation-modal'),
+    inputBubble: document.getElementById('input-bubble'),
+    bubbleTextarea: document.getElementById('bubble-textarea'),
+    inputWrapper: document.getElementById('input-wrapper')
 };
+
+let isBubbleExpanded = false;
 
 let ws = null;
 let currentAiBubble = null;
@@ -218,6 +223,35 @@ function toggleConversationMenu() {
     }
 }
 
+// ==========================================
+// 手风琴式侧边栏功能
+// ==========================================
+function toggleAccordion(sectionId) {
+    const allSections = document.querySelectorAll('.accordion-section');
+
+    allSections.forEach(section => {
+        if (section.id === sectionId) {
+            const isActive = section.classList.contains('active');
+            if (isActive) {
+                section.classList.remove('active');
+                const arrow = section.querySelector('.accordion-arrow');
+                if (arrow) arrow.textContent = '▶';
+            } else {
+                section.classList.add('active');
+                const arrow = section.querySelector('.accordion-arrow');
+                if (arrow) arrow.textContent = '▼';
+                if (sectionId === 'section-kb') {
+                    loadKnowledgeBases();
+                }
+            }
+        } else {
+            section.classList.remove('active');
+            const arrow = section.querySelector('.accordion-arrow');
+            if (arrow) arrow.textContent = '▶';
+        }
+    });
+}
+
 function renderConversationCards() {
     if (!dom.conversationCardsContainer) return;
     
@@ -271,6 +305,7 @@ async function selectConversation(convId) {
     state.isGenerating = false;
     currentAiBubble = null;
     currentAiThoughtNode = null;
+    resetBubbleState();
     
     await loadChatHistory(state.currentRoleId, convId);
     
@@ -502,6 +537,7 @@ async function selectRole(id) {
     currentAiThoughtNode = null;
     dom.userInput.disabled = false;
     dom.sendBtn.disabled = false;
+    resetBubbleState();
 
     try {
         const resSettings = await fetch(`/api/roles/${id}/settings`);
@@ -726,29 +762,200 @@ function showTypingIndicator() {
 }
 function hideTypingIndicator() { if (typingIndicatorNode) { typingIndicatorNode.remove(); typingIndicatorNode = null; } }
 
+function toggleBubble() {
+    if (isBubbleExpanded) {
+        collapseBubble();
+    } else {
+        expandBubble();
+    }
+}
+
+function expandBubble() {
+    isBubbleExpanded = true;
+    if (dom.inputBubble) dom.inputBubble.style.display = 'block';
+    if (dom.inputWrapper) dom.inputWrapper.classList.add('bubble-active');
+    if (dom.bubbleTextarea) {
+        dom.bubbleTextarea.value = dom.userInput.value;
+        dom.bubbleTextarea.focus();
+    }
+    const toggle = document.getElementById('bubble-toggle');
+    if (toggle) {
+        toggle.classList.add('expanded');
+        toggle.title = '收起多行输入';
+    }
+}
+
+function collapseBubble() {
+    isBubbleExpanded = false;
+    if (dom.inputBubble) {
+        dom.inputBubble.classList.add('collapsing');
+        setTimeout(() => {
+            dom.inputBubble.style.display = 'none';
+            dom.inputBubble.classList.remove('collapsing');
+        }, 200);
+    }
+    if (dom.userInput) dom.userInput.value = dom.bubbleTextarea.value;
+    if (dom.inputWrapper) dom.inputWrapper.classList.remove('bubble-active');
+    const toggle = document.getElementById('bubble-toggle');
+    if (toggle) {
+        toggle.classList.remove('expanded');
+        toggle.title = '展开多行输入';
+    }
+}
+
+function syncBubbleContent(source) {
+    if (source === 'bubble' && dom.userInput) {
+        dom.userInput.value = dom.bubbleTextarea.value;
+    } else if (source === 'input' && dom.bubbleTextarea) {
+        dom.bubbleTextarea.value = dom.userInput.value;
+    }
+}
+
+function resetBubbleState() {
+    if (isBubbleExpanded) {
+        collapseBubble();
+    }
+    if (dom.userInput) dom.userInput.value = '';
+    if (dom.bubbleTextarea) dom.bubbleTextarea.value = '';
+    const toggle = document.getElementById('bubble-toggle');
+    if (toggle) {
+        toggle.style.display = 'none';
+        toggle.classList.remove('expanded');
+        toggle.title = '展开多行输入';
+    }
+    if (dom.inputWrapper) dom.inputWrapper.classList.remove('bubble-active');
+}
+
 async function sendMessage() {
     if (!state.currentRoleId || !state.currentConversationId || state.isGenerating) return;
-    const text = dom.userInput.value.trim();
+
+    const text = isBubbleExpanded ? dom.bubbleTextarea.value.trim() : dom.userInput.value.trim();
     if (!text && state.selectedImages.length === 0) return;
 
     appendUserMessage(text, state.selectedImages);
     showTypingIndicator();
 
-    const payload = { 
-        role_id: state.currentRoleId, 
+    const payload = {
+        role_id: state.currentRoleId,
         conversation_id: state.currentConversationId,
-        user_input: text, 
-        images: state.selectedImages, 
+        user_input: text,
+        images: state.selectedImages,
         enable_think: state.enableThink,
         enable_search: state.enableSearch,
         depth_recall_mode: state.depthRecallMode,
         model: state.currentModel
     };
-    state.isGenerating = true; dom.userInput.value = ''; dom.previewArea.innerHTML = ''; state.selectedImages = [];
+    state.isGenerating = true;
+
+    if (isBubbleExpanded) {
+        dom.bubbleTextarea.value = '';
+        collapseBubble();
+    }
+    dom.userInput.value = '';
+    dom.previewArea.innerHTML = '';
+    state.selectedImages = [];
+
     ws.send(JSON.stringify(payload));
 }
+
 dom.sendBtn.onclick = sendMessage;
-dom.userInput.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+
+let inputAreaFocused = false;
+let toggleClicked = false;
+
+function isFocusInInputArea() {
+    const active = document.activeElement;
+    return active === dom.userInput || active === dom.bubbleTextarea;
+}
+
+function updateExpandButtonVisibility() {
+    const toggle = document.getElementById('bubble-toggle');
+    if (!toggle) return;
+    const isActive = inputAreaFocused || toggleClicked || isBubbleExpanded;
+    toggle.style.display = isActive ? 'flex' : 'none';
+}
+
+// 阻止按钮抢夺焦点
+const toggleBtn = document.getElementById('bubble-toggle');
+if (toggleBtn) {
+    toggleBtn.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        toggleClicked = true;
+        setTimeout(() => { toggleClicked = false; }, 200);
+    });
+}
+
+dom.userInput.addEventListener('input', function() {
+    syncBubbleContent('input');
+    updateExpandButtonVisibility();
+});
+
+dom.userInput.addEventListener('focus', function() {
+    inputAreaFocused = true;
+    updateExpandButtonVisibility();
+});
+
+dom.userInput.addEventListener('blur', function() {
+    setTimeout(() => {
+        inputAreaFocused = isFocusInInputArea();
+        updateExpandButtonVisibility();
+    }, 0);
+});
+
+dom.userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+if (dom.bubbleTextarea) {
+    dom.bubbleTextarea.addEventListener('input', function() {
+        syncBubbleContent('bubble');
+    });
+
+    dom.bubbleTextarea.addEventListener('focus', function() {
+        inputAreaFocused = true;
+        updateExpandButtonVisibility();
+    });
+
+    dom.bubbleTextarea.addEventListener('blur', function() {
+        setTimeout(() => {
+            inputAreaFocused = isFocusInInputArea();
+            updateExpandButtonVisibility();
+        }, 0);
+    });
+
+    dom.bubbleTextarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+}
+
+function isInputOverflowing() {
+    const input = dom.userInput;
+    if (!input) return false;
+    const style = window.getComputedStyle(input);
+    const lineHeight = parseFloat(style.lineHeight) || 24;
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    const paddingBottom = parseFloat(style.paddingBottom) || 0;
+    const maxHeight = parseFloat(style.maxHeight) || 150;
+    const availableHeight = maxHeight - paddingTop - paddingBottom;
+    const maxLines = Math.floor(availableHeight / lineHeight);
+
+    const tempDiv = document.createElement('div');
+    tempDiv.style.cssText = `
+        position: absolute; visibility: hidden; white-space: pre-wrap; word-wrap: break-word;
+        font-family: ${style.fontFamily}; font-size: ${style.fontSize};
+        line-height: ${style.lineHeight}; width: ${input.clientWidth}px;
+        padding: ${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft};
+    `;
+    tempDiv.textContent = input.value || '\u00A0';
+    document.body.appendChild(tempDiv);
+    const actualHeight = tempDiv.offsetHeight;
+    document.body.removeChild(tempDiv);
+
+    return actualHeight > availableHeight;
+}
 
 // 工具控制
 
@@ -829,6 +1036,55 @@ function toggleDepthRecall() {
 if (dom.depthRecallBtn) {
     dom.depthRecallBtn.onclick = toggleDepthRecall;
 }
+
+// ==========================================
+// 上传下拉菜单控制
+// ==========================================
+const uploadDropdown = document.getElementById('upload-dropdown');
+const uploadTrigger = document.getElementById('upload-trigger');
+const uploadMenu = document.getElementById('upload-menu');
+
+function toggleUploadMenu(event) {
+    event.stopPropagation();
+    const isShowing = uploadMenu.classList.contains('show');
+    if (isShowing) {
+        closeUploadMenu();
+    } else {
+        uploadMenu.style.display = 'block';
+        void uploadMenu.offsetWidth;
+        uploadMenu.classList.add('show');
+    }
+}
+
+function closeUploadMenu() {
+    uploadMenu.classList.remove('show');
+    setTimeout(() => {
+        if (!uploadMenu.classList.contains('show')) {
+            uploadMenu.style.display = 'none';
+        }
+    }, 200);
+}
+
+function triggerImageUpload() {
+    closeUploadMenu();
+    document.getElementById('file-input').click();
+}
+
+if (uploadTrigger) {
+    uploadTrigger.addEventListener('click', toggleUploadMenu);
+}
+
+document.addEventListener('click', (e) => {
+    if (uploadDropdown && !uploadDropdown.contains(e.target)) {
+        closeUploadMenu();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeUploadMenu();
+    }
+});
 
 // ==========================================
 // 图片上传与预览
@@ -1946,4 +2202,773 @@ if (confirmDeleteRole2) {
 
 if (dom.deleteModeHint) {
     dom.deleteModeHint.style.display = 'none';
+}
+
+// ==========================================
+// 知识库管理
+// ==========================================
+let kbState = {
+    list: [],
+    pendingDeleteId: null
+};
+
+function openKbDrawer() {
+    dom.rightDrawer.classList.remove('open');
+    loadKnowledgeBases();
+    document.getElementById('kb-drawer').classList.add('open');
+}
+
+function closeKbDrawer() {
+    document.getElementById('kb-drawer').classList.remove('open');
+}
+
+async function loadKnowledgeBases() {
+    try {
+        const res = await fetch('/api/knowledge-bases');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        kbState.list = await res.json();
+        renderKbList();
+        updateKbStats();
+        renderSidebarKbList();
+    } catch (e) {
+        console.error('加载知识库失败:', e);
+        const container = document.getElementById('kb-management-list');
+        const emptyHint = document.getElementById('kb-empty-hint');
+        if (container) {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4d4f;">加载失败，请检查网络连接</div>';
+        }
+        if (emptyHint) emptyHint.style.display = 'none';
+    }
+}
+
+function renderKbList() {
+    const container = document.getElementById('kb-management-list');
+    const emptyHint = document.getElementById('kb-empty-hint');
+
+    if (kbState.list.length === 0) {
+        container.innerHTML = '';
+        emptyHint.style.display = 'block';
+        return;
+    }
+
+    emptyHint.style.display = 'none';
+    container.innerHTML = kbState.list.map(kb => `
+        <div class="kb-card" data-kb-id="${kb.kb_id}">
+            <div class="kb-card-header">
+                <span class="kb-name">${escapeHtml(kb.name)}</span>
+                <span class="kb-doc-count">${kb.document_count} 个文档</span>
+            </div>
+            ${kb.description ? `<div class="kb-card-body"><p class="kb-description">${escapeHtml(kb.description)}</p></div>` : ''}
+            <div class="kb-card-footer">
+                <span>${formatDate(kb.created_at)}</span>
+                <button class="kb-delete-btn" onclick="event.stopPropagation(); showDeleteKbDialog('${kb.kb_id}', '${escapeHtml(kb.name)}')">删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderSidebarKbList() {
+    const container = document.getElementById('kb-list');
+    if (!container) return;
+
+    if (kbState.list.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = kbState.list.map(kb => `
+        <div class="kb-sidebar-item flex-item" data-kb-id="${kb.kb_id}" onclick="openKbDrawer(); openKbDetail('${kb.kb_id}')" style="background: linear-gradient(135deg, var(--bg-l2), var(--bg-l3));">
+            <span class="kb-sidebar-name">${escapeHtml(kb.name)}</span>
+            <span class="kb-sidebar-count">${kb.document_count}文档</span>
+        </div>
+    `).join('');
+}
+
+function updateKbStats() {
+    const total = kbState.list.length;
+    const docTotal = kbState.list.reduce((sum, kb) => sum + kb.document_count, 0);
+    document.getElementById('kb-total-count').textContent = total;
+    document.getElementById('kb-doc-total-count').textContent = docTotal;
+}
+
+function showCreateKbDialog() {
+    document.getElementById('new-kb-name').value = '';
+    document.getElementById('new-kb-desc').value = '';
+    document.getElementById('create-kb-modal').style.display = 'flex';
+}
+
+function closeCreateKbModal() {
+    document.getElementById('create-kb-modal').style.display = 'none';
+}
+
+async function confirmCreateKb() {
+    const name = document.getElementById('new-kb-name').value.trim();
+    const desc = document.getElementById('new-kb-desc').value.trim();
+
+    if (!name) {
+        alert('请输入知识库名称');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/knowledge-bases', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, description: desc})
+        });
+
+        if (res.ok) {
+            closeCreateKbModal();
+            await loadKnowledgeBases();
+        } else {
+            const err = await res.json();
+            alert('创建失败: ' + (err.detail || '未知错误'));
+        }
+    } catch (e) {
+        alert('网络错误: ' + e.message);
+    }
+}
+
+function showDeleteKbDialog(kbId, kbName) {
+    kbState.pendingDeleteId = kbId;
+    document.getElementById('delete-kb-message').textContent =
+        `确定要删除知识库「${kbName}」吗？此操作将同时删除该知识库下的所有文档，且无法恢复。`;
+    document.getElementById('delete-kb-modal').style.display = 'flex';
+}
+
+function closeDeleteKbModal() {
+    document.getElementById('delete-kb-modal').style.display = 'none';
+    kbState.pendingDeleteId = null;
+}
+
+async function confirmDeleteKb() {
+    if (!kbState.pendingDeleteId) return;
+
+    try {
+        const res = await fetch(`/api/knowledge-bases/${kbState.pendingDeleteId}`, {
+            method: 'DELETE'
+        });
+
+        if (res.ok) {
+            closeDeleteKbModal();
+            await loadKnowledgeBases();
+        } else {
+            alert('删除失败');
+        }
+    } catch (e) {
+        alert('网络错误: ' + e.message);
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(isoStr) {
+    try {
+        const d = new Date(isoStr);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    } catch { return isoStr; }
+}
+
+// 知识库事件绑定
+document.getElementById('btn-create-kb').addEventListener('click', () => {
+    openKbDrawer();
+    setTimeout(showCreateKbDialog, 300);
+});
+
+document.getElementById('btn-create-kb-drawer').addEventListener('click', showCreateKbDialog);
+
+// ===== 知识库详情视图 =====
+let currentKbId = null;
+let pendingDeleteDoc = null;  // { docId, filename }
+
+function openKbDetail(kbId) {
+    currentKbId = kbId;
+
+    document.getElementById('kb-main-view').style.display = 'none';
+    const detailView = document.getElementById('kb-detail-view');
+    detailView.style.display = 'block';
+
+    loadKbDetail(kbId);
+}
+
+function backToKbList() {
+    currentKbId = null;
+    document.getElementById('kb-detail-view').style.display = 'none';
+    document.getElementById('kb-main-view').style.display = 'block';
+}
+
+async function loadKbDetail(kbId) {
+    try {
+        const res = await fetch(`/api/knowledge-bases/${kbId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const kb = await res.json();
+
+        document.getElementById('detail-kb-name').textContent = kb.name;
+        document.getElementById('edit-kb-name-input').value = kb.name || '';
+        document.getElementById('edit-kb-desc-input').value = kb.description || '';
+
+        renderDocList(kb.documents || []);
+
+    } catch (e) {
+        console.error('加载知识库详情失败:', e);
+        const container = document.getElementById('kb-detail-doc-list');
+        if (container) {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4d4f;">加载失败，请检查网络连接</div>';
+        }
+    }
+}
+
+function renderDocList(documents) {
+    const container = document.getElementById('kb-detail-doc-list');
+    const emptyHint = document.getElementById('kb-doc-empty-hint');
+    const countSpan = document.getElementById('detail-doc-count');
+
+    countSpan.textContent = documents.length;
+
+    if (documents.length === 0) {
+        container.innerHTML = '';
+        emptyHint.style.display = 'block';
+        return;
+    }
+
+    emptyHint.style.display = 'none';
+
+    const fileIcons = {'docx': 'DOC', 'xlsx': 'XLS', 'pdf': 'PDF'};
+
+    container.innerHTML = documents.map(doc => `
+        <div class="kb-doc-item" data-doc-id="${doc.doc_id}">
+            <div class="kb-doc-icon">${fileIcons[doc.file_type] || 'FILE'}</div>
+            <div class="kb-doc-info">
+                <div class="kb-doc-name">${escapeHtml(doc.filename)}</div>
+                <div class="kb-doc-meta">
+                    <span>${formatFileSize(doc.file_size)}</span>
+                    <span>${formatDate(doc.uploaded_at)}</span>
+                </div>
+            </div>
+            <span class="kb-doc-status ${doc.parsed_status}">
+                ${doc.parsed_status === 'success' ? '✓ 已解析' : doc.parsed_status === 'error' ? '✗ 解析失败' : '⏳ 处理中'}
+            </span>
+            <div class="kb-doc-actions">
+                <button class="icon-btn preview-btn" title="预览" onclick="previewDocument('${doc.doc_id}')">预览</button>
+                <button class="icon-btn delete-btn" title="删除" onclick="deleteDocument('${doc.doc_id}', '${escapeHtml(doc.filename)}')">删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function saveKbSettings() {
+    if (!currentKbId) return;
+
+    const name = document.getElementById('edit-kb-name-input').value.trim();
+    const desc = document.getElementById('edit-kb-desc-input').value.trim();
+
+    if (!name) {
+        alert('请输入知识库名称');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/knowledge-bases/${currentKbId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, description: desc})
+        });
+
+        if (res.ok) {
+            document.getElementById('detail-kb-name').textContent = name;
+            alert('保存成功');
+        } else {
+            const err = await res.json();
+            alert('保存失败: ' + (err.detail || '未知错误'));
+        }
+    } catch (e) {
+        alert('网络错误: ' + e.message);
+    }
+}
+
+const kbFileInput = document.getElementById('kb-file-input');
+
+if (kbFileInput) {
+    kbFileInput.addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (!files.length) return;
+
+        for (let file of files) {
+            await uploadFileToKb(file);
+        }
+
+        kbFileInput.value = '';
+    });
+}
+
+async function uploadFileToKb(file) {
+    if (!currentKbId) {
+        alert('请先选择一个知识库');
+        return;
+    }
+
+    const allowedExts = ['.docx', '.xlsx', '.pdf'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowedExts.includes(ext)) {
+        alert(`不支持的文件格式: ${ext}`);
+        return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+        alert(`文件过大: ${(file.size / 1024 / 1024).toFixed(1)}MB，最大允许 50MB`);
+        return;
+    }
+
+    const dropzone = document.getElementById('kb-upload-dropzone');
+    const originalContent = dropzone ? dropzone.innerHTML : '';
+
+    if (dropzone) {
+        dropzone.innerHTML = `
+            <div style="font-size: 32px; margin-bottom: 8px;">⏳</div>
+            <div style="color: var(--text-primary); font-size: 14px; margin-bottom: 4px;">正在上传: ${escapeHtml(file.name)}</div>
+            <div style="color: var(--text-secondary); font-size: 12px;">请稍候...</div>
+        `;
+        dropzone.style.pointerEvents = 'none';
+        dropzone.style.opacity = '0.6';
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(`/api/knowledge-bases/${currentKbId}/documents`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            await loadKbDetail(currentKbId);
+        } else {
+            const err = await res.json();
+            alert('上传失败: ' + (err.detail || '未知错误'));
+        }
+    } catch (e) {
+        alert('上传错误: ' + e.message);
+    } finally {
+        if (dropzone) {
+            dropzone.innerHTML = originalContent;
+            dropzone.style.pointerEvents = '';
+            dropzone.style.opacity = '';
+        }
+    }
+}
+
+async function previewDocument(docId) {
+    if (!currentKbId) {
+        alert('请先选择一个知识库');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/knowledge-bases');
+        docSelectorState.knowledgeBases = await res.json();
+
+        if (docSelectorState.knowledgeBases.length === 0) {
+            alert('暂无可用知识库');
+            return;
+        }
+
+        docSelectorState.selectedKbId = currentKbId;
+        renderKbTabs();
+
+        await loadDocumentsForKb(currentKbId);
+
+        document.getElementById('kb-doc-selector').style.display = 'flex';
+
+        docSelectorState.selectedDocId = docId;
+        renderDocListForSelector();
+        await loadAndRenderDocPreview(docId);
+
+    } catch (e) {
+        console.error('预览文档失败:', e);
+        alert('预览失败: ' + e.message);
+    }
+}
+
+function deleteDocument(docId, filename) {
+    pendingDeleteDoc = { docId, filename };
+    document.getElementById('delete-doc-message').textContent = 
+        `确定要删除文档「${filename}」吗？此操作无法恢复。`;
+    document.getElementById('delete-doc-modal').style.display = 'flex';
+}
+
+function closeDeleteDocModal() {
+    document.getElementById('delete-doc-modal').style.display = 'none';
+    pendingDeleteDoc = null;
+}
+
+async function confirmDeleteDoc() {
+    if (!pendingDeleteDoc || !currentKbId) {
+        closeDeleteDocModal();
+        return;
+    }
+
+    const { docId, filename } = pendingDeleteDoc;
+
+    try {
+        const res = await fetch(`/api/knowledge-bases/${currentKbId}/documents/${docId}`, {
+            method: 'DELETE'
+        });
+
+        if (res.ok) {
+            closeDeleteDocModal();
+            await loadKbDetail(currentKbId);
+        } else {
+            alert('删除失败');
+        }
+    } catch (e) {
+        alert('删除错误: ' + e.message);
+    }
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+const kbUploadDropzone = document.getElementById('kb-upload-dropzone');
+if (kbUploadDropzone) {
+    kbUploadDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        kbUploadDropzone.classList.add('dragover');
+    });
+
+    kbUploadDropzone.addEventListener('dragleave', () => {
+        kbUploadDropzone.classList.remove('dragover');
+    });
+
+    kbUploadDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        kbUploadDropzone.classList.remove('dragover');
+
+        const files = e.dataTransfer.files;
+        if (!files.length) return;
+
+        for (let file of files) {
+            uploadFileToKb(file);
+        }
+    });
+}
+
+document.addEventListener('click', (e) => {
+    const card = e.target.closest('.kb-card');
+    if (card && !e.target.closest('.kb-delete-btn')) {
+        const kbId = card.dataset.kbId;
+        if (kbId) openKbDetail(kbId);
+    }
+});
+
+// ==========================================
+// 知识库文档选择器 (Task 9)
+// ==========================================
+let docSelectorState = {
+    knowledgeBases: [],
+    selectedKbId: null,
+    documents: [],
+    selectedDocId: null,
+    parsedData: null,
+    isFullscreen: false,
+    _savedModalStyle: null
+};
+
+async function openKnowledgeBaseSelector() {
+    closeUploadMenu();
+
+    try {
+        const res = await fetch('/api/knowledge-bases');
+        docSelectorState.knowledgeBases = await res.json();
+
+        if (docSelectorState.knowledgeBases.length === 0) {
+            alert('暂无可用知识库，请先在知识库管理中创建');
+            return;
+        }
+
+        const firstKb = docSelectorState.knowledgeBases.find(kb => kb.document_count > 0) || docSelectorState.knowledgeBases[0];
+        docSelectorState.selectedKbId = firstKb.kb_id;
+
+        renderKbTabs();
+        await loadDocumentsForKb(firstKb.kb_id);
+
+        document.getElementById('kb-doc-selector').style.display = 'flex';
+
+    } catch (e) {
+        console.error('加载知识库失败:', e);
+        alert('加载失败');
+    }
+}
+
+function closeKbDocSelector() {
+    document.getElementById('kb-doc-selector').style.display = 'none';
+    clearDocSelection();
+}
+
+function renderKbTabs() {
+    const container = document.getElementById('kb-selector-tabs');
+    container.innerHTML = docSelectorState.knowledgeBases.map(kb => `
+        <div class="kb-tab-item ${kb.kb_id === docSelectorState.selectedKbId ? 'active' : ''}"
+             data-kb-id="${kb.kb_id}"
+             onclick="selectKbTab('${kb.kb_id}')"
+             title="${escapeHtml(kb.name)} (${kb.document_count}个文档)">
+            ${escapeHtml(kb.name)}
+        </div>
+    `).join('');
+}
+
+async function selectKbTab(kbId) {
+    if (kbId === docSelectorState.selectedKbId) return;
+
+    docSelectorState.selectedKbId = kbId;
+    docSelectorState.selectedDocId = null;
+    docSelectorState.parsedData = null;
+
+    renderKbTabs();
+    resetPreviewArea();
+
+    await loadDocumentsForKb(kbId);
+}
+
+async function loadDocumentsForKb(kbId) {
+    try {
+        const res = await fetch(`/api/knowledge-bases/${kbId}/documents`);
+        docSelectorState.documents = await res.json();
+
+        renderDocListForSelector();
+
+    } catch (e) {
+        console.error('加载文档列表失败:', e);
+    }
+}
+
+function renderDocListForSelector() {
+    const container = document.getElementById('kb-selector-doc-list');
+    const emptyHint = document.getElementById('kb-selector-empty-hint');
+
+    if (docSelectorState.documents.length === 0) {
+        container.innerHTML = '';
+        emptyHint.style.display = 'block';
+        return;
+    }
+
+    emptyHint.style.display = 'none';
+
+    const fileIcons = {'docx': 'DOC', 'xlsx': 'XLS', 'pdf': 'PDF'};
+
+    container.innerHTML = docSelectorState.documents.map(doc => `
+        <div class="selector-doc-item ${doc.doc_id === docSelectorState.selectedDocId ? 'selected' : ''}"
+             data-doc-id="${doc.doc_id}"
+             onclick="selectDocumentInSelector('${doc.doc_id}')">
+            <div class="kb-doc-icon">${fileIcons[doc.file_type] || 'FILE'}</div>
+            <div style="font-size:13px; color:var(--text-primary); word-break:break-all;">${escapeHtml(doc.filename)}</div>
+            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${formatFileSize(doc.file_size)} · ${formatDate(doc.uploaded_at)}</div>
+        </div>
+    `).join('');
+}
+
+async function selectDocumentInSelector(docId) {
+    docSelectorState.selectedDocId = docId;
+
+    renderDocListForSelector();
+
+    await loadAndRenderDocPreview(docId);
+}
+
+async function loadAndRenderDocPreview(docId) {
+    const previewEl = document.getElementById('kb-doc-preview');
+    previewEl.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-secondary);">⏳ 正在加载...</div>';
+
+    try {
+        const kbId = docSelectorState.selectedKbId;
+        const res = await fetch(`/api/knowledge-bases/${kbId}/documents/${docId}`);
+        const data = await res.json();
+
+        docSelectorState.parsedData = data.parsed_data;
+
+        const filename = data.filename || '未知文档';
+        document.getElementById('kb-preview-title').textContent = filename;
+        document.getElementById('fullscreen-preview-title').textContent = filename;
+
+        if (data.parsed_data && data.parsed_data.sections) {
+            renderParsedContent(data.parsed_data.sections, previewEl);
+        } else {
+            previewEl.innerHTML = `<p style="color:var(--text-secondary);">该文档尚未完成解析或解析失败。</p>`;
+        }
+
+    } catch (e) {
+        previewEl.innerHTML = `<p style="color:#ff4d4f;">加载失败: ${e.message}</p>`;
+    }
+}
+
+function renderParsedContent(sections, container) {
+    let html = '';
+
+    for (const section of sections) {
+        switch (section.type) {
+            case 'heading':
+                const level = Math.min(Math.max(section.level || 1, 1), 3);
+                html += `<h${level}>${escapeHtml(section.content)}</h${level}>`;
+                break;
+
+            case 'paragraph':
+                html += `<p>${escapeHtml(section.content).replace(/\n/g, '<br>')}</p>`;
+                break;
+
+            case 'table':
+                if (section.headers && section.headers.length > 0) {
+                    html += '<table><thead><tr>';
+                    section.headers.forEach(h => {
+                        html += `<th>${escapeHtml(h)}</th>`;
+                    });
+                    html += '</tr></thead><tbody>';
+
+                    if (section.rows && section.rows.length > 0) {
+                        section.rows.forEach(row => {
+                            html += '<tr>';
+                            row.forEach(cell => {
+                                html += `<td>${escapeHtml(cell)}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                    }
+
+                    html += '</tbody></table>';
+                } else if (section.markdown) {
+                    html += `<pre style="white-space:pre-wrap;">${escapeHtml(section.markdown)}</pre>`;
+                }
+                break;
+
+            default:
+                if (section.content) {
+                    html += `<p>${escapeHtml(section.content)}</p>`;
+                }
+        }
+    }
+
+    container.innerHTML = html;
+}
+
+function resetPreviewArea() {
+    document.getElementById('kb-doc-preview').innerHTML = `
+        <div style="text-align:center; color:var(--text-secondary); padding:40px;">
+            请从左侧选择一个文档
+        </div>
+    `;
+    document.getElementById('kb-preview-title').textContent = '文档预览';
+    updateSelectedTextLength(0);
+}
+
+function toggleDocPreviewFullscreen() {
+    const modalEl = document.getElementById('kb-doc-selector');
+    const modalContentEl = modalEl.querySelector('.modal-content.kb-doc-selector-content');
+
+    if (!docSelectorState.isFullscreen) {
+        docSelectorState._savedModalStyle = {
+            borderRadius: modalContentEl.style.borderRadius,
+            width: modalContentEl.style.width,
+            maxWidth: modalContentEl.style.maxWidth,
+            maxHeight: modalContentEl.style.maxHeight,
+            height: modalContentEl.style.height
+        };
+
+        modalContentEl.style.borderRadius = '0';
+        modalContentEl.style.width = '100vw';
+        modalContentEl.style.maxWidth = '100vw';
+        modalContentEl.style.maxHeight = '100vh';
+        modalContentEl.style.height = '100vh';
+
+        docSelectorState.isFullscreen = true;
+
+        const btn = event.target;
+        if (btn) btn.textContent = '退出全屏';
+    } else {
+        if (docSelectorState._savedModalStyle) {
+            modalContentEl.style.borderRadius = docSelectorState._savedModalStyle.borderRadius || '';
+            modalContentEl.style.width = docSelectorState._savedModalStyle.width || '';
+            modalContentEl.style.maxWidth = docSelectorState._savedModalStyle.maxWidth || '';
+            modalContentEl.style.maxHeight = docSelectorState._savedModalStyle.maxHeight || '';
+            modalContentEl.style.height = docSelectorState._savedModalStyle.height || '';
+        }
+
+        docSelectorState.isFullscreen = false;
+
+        const btn = event.target;
+        if (btn) btn.textContent = '全屏';
+    }
+}
+
+function updateSelectedTextLength(length) {
+    document.getElementById('selected-text-length').textContent = length;
+    document.getElementById('confirm-doc-btn').disabled = length <= 0;
+}
+
+function clearDocSelection() {
+    if (window.getSelection) {
+        window.getSelection().removeAllRanges();
+    }
+    updateSelectedTextLength(0);
+}
+
+function confirmDocumentSelection() {
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+
+    if (!selectedText) {
+        alert('请先在预览区域选择要引用的文本');
+        return;
+    }
+
+    const currentDoc = docSelectorState.documents.find(d => d.doc_id === docSelectorState.selectedDocId);
+    const currentKb = docSelectorState.knowledgeBases.find(k => k.kb_id === docSelectorState.selectedKbId);
+
+    if (!currentDoc || !currentKb) return;
+
+    const refText = `\n[来自知识库: ${currentKb.name} - ${currentDoc.filename}]\n${selectedText}\n[/知识库引用]\n`;
+
+    const inputEl = document.getElementById('user-input');
+    if (inputEl) {
+        const startPos = inputEl.selectionStart;
+        const endPos = inputEl.selectionEnd;
+        const before = inputEl.value.substring(0, startPos);
+        const after = inputEl.value.substring(endPos);
+
+        inputEl.value = before + refText + after;
+        inputEl.focus();
+        inputEl.setSelectionRange(
+            startPos + refText.length,
+            startPos + refText.length
+        );
+
+        inputEl.dispatchEvent(new Event('input'));
+    }
+
+    closeKbDocSelector();
+}
+
+document.addEventListener('mouseup', handleTextSelection);
+document.addEventListener('keyup', handleTextSelection);
+
+function handleTextSelection() {
+    const selector = document.getElementById('kb-doc-selector');
+    if (!selector || selector.style.display === 'none') return;
+
+    const selection = window.getSelection();
+    const text = selection.toString().trim();
+
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const previewEl = document.getElementById('kb-doc-preview');
+        if (previewEl && previewEl.contains(range.commonAncestorContainer)) {
+            updateSelectedTextLength(text.length);
+            return;
+        }
+    }
 }
