@@ -1,4 +1,4 @@
-# LLM RolePlay
+# Chronos Agent --- An LLM RolePlay Tool
 
 一个功能强大的大语言模型角色扮演对话系统，支持分层长期记忆管理、深度回忆功能、现代化 Web UI、多模型选择、多模态对话等特性。
 
