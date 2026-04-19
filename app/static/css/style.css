@@ -977,6 +977,80 @@ textarea#user-input { flex: 1; background: transparent; border: none; color: whi
     color: var(--text-secondary);
 }
 
+.citation-tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px 0;
+    min-height: 0;
+}
+
+.citation-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 12px;
+    background: var(--bg-l2);
+    border: 1px solid var(--bg-l3);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    max-width: 280px;
+}
+
+.citation-tag:hover {
+    border-color: var(--accent);
+    background: var(--bg-l3);
+}
+
+.citation-tag-filename {
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.citation-tag-range {
+    color: var(--accent);
+    font-family: monospace;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.citation-tag-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+    padding: 0;
+    margin-left: 2px;
+}
+
+.citation-tag-close:hover {
+    background: #ff4d4f;
+    color: #fff;
+}
+
+.citation-tag-readonly {
+    cursor: pointer;
+}
+
+.citation-tag-readonly .citation-tag-close {
+    display: none;
+}
+
 /* ==========================================
    知识库管理样式
    ========================================== */
@@ -1255,5 +1329,81 @@ textarea#user-input { flex: 1; background: transparent; border: none; color: whi
 /* 选中文本高亮增强 */
 #kb-doc-preview ::selection {
     background: rgba(96, 150, 250, 0.3);
+}
+
+.citation-tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px 4px;
+    min-height: 0;
+}
+
+.citation-tags-container:empty {
+    display: none;
+}
+
+.citation-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 10px;
+    background-color: var(--bg-l2);
+    border: 1px solid var(--bg-l3);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: default;
+    user-select: none;
+    max-width: 240px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.citation-tag:hover {
+    border-color: var(--bg-l4);
+    background-color: var(--bg-l3);
+}
+
+.citation-tag-filename {
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+}
+
+.citation-tag-range {
+    color: var(--text-tertiary);
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.citation-tag-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.citation-tag-close:hover {
+    background-color: rgba(255, 80, 80, 0.15);
+    color: #ff5050;
+}
+
+.citation-tag-readonly .citation-tag-close {
+    display: none;
 }
 
