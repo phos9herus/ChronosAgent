@@ -103,6 +103,7 @@
             </div>
             <div class="input-wrapper" id="input-wrapper">
                     <div id="preview-area" class="preview-container"></div>
+                    <div id="citation-tags-container" class="citation-tags-container"></div>
                     <div class="toolbar">
                         <div class="toolbar-left">
                             <div class="upload-dropdown" id="upload-dropdown">
@@ -668,6 +669,16 @@
                 <button class="close-btn" onclick="toggleDocPreviewFullscreen()">&times;</button>
             </div>
             <div id="kb-fullscreen-content" style="flex:1; overflow:auto; padding:30px; line-height:1.8; font-size:15px;"></div>
+        </div>
+    </div>
+
+    <div id="citation-preview-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeCitationPreview()">
+        <div class="modal-content" style="max-width:600px; max-height:70vh;">
+            <div class="modal-header" style="padding:16px 20px 12px; display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="citation-preview-title" style="margin:0; font-size:15px;"></h3>
+                <button onclick="closeCitationPreview()" style="background:none; border:none; color:var(--text-secondary); font-size:22px; cursor:pointer;">&times;</button>
+            </div>
+            <div id="citation-preview-body" style="padding:20px; overflow-y:auto; max-height:50vh; line-height:1.8; color:var(--text-primary); white-space:pre-wrap; word-break:break-word;"></div>
         </div>
     </div>
 </body>
