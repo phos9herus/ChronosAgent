@@ -633,5 +633,67 @@ class KnowledgeBaseService:
             self.logger.error(f"删除文档过程中发生错误: {e}")
             return False
 
+    def get_document_content_range(self, kb_id: str, doc_id: str, char_start: int, char_end: int) -> dict:
+        if not self._validate_kb_id(kb_id):
+            return {"error": "无效的知识库 ID 格式"}
+
+        if not self._validate_kb_id(doc_id):
+            return {"error": "无效的文档 ID 格式"}
+
+        meta_data = self._load_kb_meta(kb_id)
+        if meta_data is None:
+            return {"error": f"知识库不存在: {kb_id}"}
+
+        documents = meta_data.get('documents', [])
+        doc_info = next((d for d in documents if d.get('doc_id') == doc_id), None)
+        if not doc_info:
+            return {"error": f"文档不存在: {doc_id}"}
+
+        parsed_data_path = doc_info.get('parsed_data_path')
+        if not parsed_data_path:
+            return {"error": "文档未解析或解析数据路径缺失"}
+
+        kb_dir = os.path.join(self.base_dir, kb_id)
+        full_parsed_path = os.path.join(kb_dir, parsed_data_path)
+
+        if not os.path.exists(full_parsed_path):
+            return {"error": f"解析数据文件不存在: {full_parsed_path}"}
+
+        try:
+            with open(full_parsed_path, 'r', encoding='utf-8') as f:
+                parsed_data = json.load(f)
+
+            plain_text = parsed_data.get('plain_text_preview', '')
+            total_length = len(plain_text)
+
+            if char_start < 0:
+                char_start = 0
+
+            if char_end is None or char_end > total_length:
+                char_end = total_length
+
+            if char_start >= total_length:
+                return {
+                    "content": "",
+                    "doc_name": doc_info.get('filename', ''),
+                    "total_length": total_length,
+                    "error": "起始位置超出文档长度"
+                }
+
+            content = plain_text[char_start:char_end]
+
+            return {
+                "content": content,
+                "doc_name": doc_info.get('filename', ''),
+                "total_length": total_length
+            }
+
+        except (json.JSONDecodeError, IOError) as e:
+            self.logger.error(f"读取解析数据文件失败: {e}")
+            return {"error": f"读取解析数据文件失败: {str(e)}"}
+        except Exception as e:
+            self.logger.error(f"获取文档内容范围时发生错误: {e}")
+            return {"error": f"获取文档内容范围时发生错误: {str(e)}"}
+
 
 knowledge_service = KnowledgeBaseService()
