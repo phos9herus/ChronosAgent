@@ -27,7 +27,19 @@ project_root/
 │   │   ├── css/
 │   │   │   └── style.css     # 前端样式文件
 │   │   └── js/
-│   │       └── chat.js       # 前端交互逻辑
+│   │       ├── app.js            # 入口文件：事件绑定初始化
+│   │       └── modules/          # 前端模块化目录
+│   │           ├── state.js          # 全局状态树 + DOM 缓存
+│   │           ├── utils.js          # 纯工具函数
+│   │           ├── websocket.js      # WebSocket 连接管理
+│   │           ├── roles.js          # 角色列表 + 对话管理 + 侧边栏
+│   │           ├── chat-messages.js  # 消息气泡渲染 + 历史加载
+│   │           ├── input-ui.js       # 输入气泡 + 发送 + 功能开关
+│   │           ├── image-cropper.js  # 图片上传 + Canvas 裁剪器
+│   │           ├── model.js          # 模型选择器 + 启动序列
+│   │           ├── stats.js          # 统计页面 (Chart.js)
+│   │           ├── knowledge-base.js # 知识库 CRUD + 文档管理
+│   │           └── doc-selector.js   # 文档选择器 + 引用 Tag
 │   ├── templates/            # HTML 模板页面
 │   │   └── index.html        # 前端主页面
 │   └── utils/                # 工具函数

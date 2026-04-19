@@ -265,6 +265,28 @@ llm-roleplay/
 
 ## 版本更新
 
+### v3.3.2 (2026-04-19) — 前端模块化重构 + 拆分遗留修复
+
+**新特性：**
+- 🏗️ **chat.js 模块化拆分**: 将 3222 行单文件（100+ 函数）拆分为 12 个独立模块 + 1 个入口文件 (`app/static/js/modules/`)
+  - `state.js` — 全局状态树 + DOM 缓存（基石模块）
+  - `utils.js` — 纯工具函数
+  - `websocket.js` — WebSocket 连接管理
+  - `roles.js` — 角色管理 + 对话管理 + 侧边栏抽屉
+  - `chat-messages.js` — 消息气泡渲染 + 历史加载
+  - `input-ui.js` — 输入气泡 + 发送 + 功能开关(T/S/D)
+  - `image-cropper.js` — 图片上传 + Canvas 裁剪器
+  - `model.js` — 模型选择器 + 启动序列
+  - `stats.js` — 统计页面 (Chart.js)
+  - `knowledge-base.js` — 知识库 CRUD + 文档管理
+  - `doc-selector.js` — 文档选择器 + 引用 Tag + 字符偏移计算
+  - `app.js` — 入口文件：事件绑定初始化
+- 设计原则：零构建工具、全局作用域兼容 HTML 内联事件、纯重构零行为变更
+
+**Bug 修复：**
+- 🔧 修复 image-cropper.js：补全 `uploadTrigger/uploadMenu/uploadDropdown` 三个 DOM 变量声明，消除 `cropper` TDZ 风险（const → let）
+- 🔧 修复 stats.js：补全 `statsCharts/statsDom/statsCurrentModelId` 声明及 `#open-stats-drawer`/`#close-stats-drawer` 事件绑定
+
 ### v3.3.1 (2026-04-19)
 
 新特性:
@@ -372,5 +394,5 @@ MIT License
 
 ---
 
-版本: v3.3.1
+版本: v3.3.2
 最后更新: 2026-04-19
