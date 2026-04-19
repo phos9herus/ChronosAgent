@@ -145,7 +145,7 @@ python main.py
 ## 项目结构
 
 ```
-llm-roleplay/
+project_root/
 ├── app/                      # Web 后端核心目录 (FastAPI)
 │   ├── __init__.py
 │   ├── main.py               # FastAPI 实例初始化与路由挂载
@@ -174,7 +174,19 @@ llm-roleplay/
 │   │   ├── css/
 │   │   │   └── style.css     # 前端样式文件
 │   │   └── js/
-│   │       └── chat.js       # 前端交互逻辑
+│   │       ├── app.js            # 入口文件：事件绑定初始化
+│   │       └── modules/          # 前端模块化目录
+│   │           ├── state.js          # 全局状态树 + DOM 缓存
+│   │           ├── utils.js          # 纯工具函数
+│   │           ├── websocket.js      # WebSocket 连接管理
+│   │           ├── roles.js          # 角色列表 + 对话管理 + 侧边栏
+│   │           ├── chat-messages.js  # 消息气泡渲染 + 历史加载
+│   │           ├── input-ui.js       # 输入气泡 + 发送 + 功能开关
+│   │           ├── image-cropper.js  # 图片上传 + Canvas 裁剪器
+│   │           ├── model.js          # 模型选择器 + 启动序列
+│   │           ├── stats.js          # 统计页面 (Chart.js)
+│   │           ├── knowledge-base.js # 知识库 CRUD + 文档管理
+│   │           └── doc-selector.js   # 文档选择器 + 引用 Tag
 │   ├── templates/            # HTML 模板页面
 │   │   └── index.html        # 前端主页面
 │   └── utils/                # 工具函数
@@ -212,11 +224,11 @@ llm-roleplay/
 │   ├── API_test_tool.py      # API 测试工具
 │   ├── image_token_counter.py # 图片 Token 计数工具
 │   └── test.jpg              # 测试图片
-├── main.py                   # 全局启动入口 (FastAPI Web 服务)
+├── main.py                   # 全局启动入口 (Web 模式)
 ├── roleplay_core.py          # 角色扮演核心会话逻辑 (RoleplaySession)
 ├── requirements.txt          # Python 依赖列表
 ├── pyproject.toml            # 项目配置文件 (Poetry/pip)
-├── structure                 # 项目结构说明
+├── structure                 # 本文件 - 项目结构说明
 ├── test_api_latency.py       # API 延迟测试脚本
 └── test_qwen_adapter.py      # 通义千问适配器测试脚本
 ```
