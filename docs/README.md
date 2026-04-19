@@ -1,4 +1,4 @@
-# Chronos Agent --- An LLM RolePlay Tool
+# LLM RolePlay
 
 一个功能强大的大语言模型角色扮演对话系统，支持分层长期记忆管理、深度回忆功能、现代化 Web UI、多模型选择、多模态对话等特性。
 
@@ -69,8 +69,6 @@ pip install -e .
 ```
 
 ## 快速开始
-
-详细使用方法可参考[项目开发文档](./项目功能文档.md)
 
 ### Web UI 模式（推荐）
 
@@ -147,31 +145,26 @@ python main.py
 ## 项目结构
 
 ```
-project_root/
+llm-roleplay/
 ├── app/                      # Web 后端核心目录 (FastAPI)
 │   ├── __init__.py
 │   ├── main.py               # FastAPI 实例初始化与路由挂载
 │   ├── exceptions.py         # 自定义异常类
 │   ├── api/                  # API 路由控制器
 │   │   ├── endpoints.py      # 常规 HTTP 接口 (角色管理、设置、统计等)
-│   │   ├── websockets.py     # WebSocket 全双工通信接口 (实时对话)
-│   │   └── data/             # API 数据文件
-│   │       └── credentials.json  # API 凭证存储
+│   │   └── websockets.py     # WebSocket 全双工通信接口 (实时对话)
 │   ├── config/               # 配置管理模块
 │   │   ├── __init__.py
 │   │   ├── models.py         # 配置数据模型
 │   │   └── settings.py       # 全局设置与环境配置
 │   ├── schemas/              # Pydantic 数据验证模型
 │   │   ├── chat_schema.py    # WebSocket 消息输入输出模型
-│   │   ├── role_schema.py    # 角色信息验证模型
-│   │   └── knowledge_schema.py    # 知识库数据验证模型 (v3.3.0新增)
+│   │   └── role_schema.py    # 角色信息验证模型
 │   ├── services/             # 业务逻辑层
 │   │   ├── __init__.py
 │   │   ├── auth_manager.py   # 认证与凭证管理
 │   │   ├── chat_service.py   # 对话服务 (对接 RoleplaySession)
 │   │   ├── data_service.py   # 通用数据服务
-│   │   ├── document_parser.py    # 文档解析服务 (v3.3.0新增)
-│   │   ├── knowledge_service.py  # 知识库管理服务 (v3.3.0新增)
 │   │   ├── role_manager.py   # 角色管理服务
 │   │   ├── stats_service.py  # 统计数据服务
 │   │   └── user_manager.py   # 用户管理服务
@@ -185,11 +178,10 @@ project_root/
 │   ├── templates/            # HTML 模板页面
 │   │   └── index.html        # 前端主页面
 │   └── utils/                # 工具函数
-│       ├── logger.py         # 日志工具
-│       └── async_notifier.py # 异步通知工具 (v3.3.0新增)
+│       └── logger.py         # 日志工具
 ├── data/                     # 数据存储目录
 │   ├── avatars/              # 头像文件存储
-│   ├── hf_models/            # Hugging Face 模型缓存 (BGE嵌入模型等)
+│   ├── hf_models/            # Hugging Face 模型缓存
 │   ├── roles/                # 角色数据目录
 │   │   └── {role_name}/      # 单个角色的数据
 │   │       ├── role_meta.json         # 角色元数据 (设定、配置等)
@@ -206,12 +198,6 @@ project_root/
 │   ├── credentials.json      # API 凭证配置
 │   ├── roles_registry.json   # 角色注册表
 │   └── user_meta.json        # 用户元数据
-├── docs/                     # 项目文档目录 (v3.3.0整理)
-│   ├── README.md             # 项目说明文档
-│   ├── pyproject.toml        # 项目配置文件副本 (Poetry/pip)
-│   ├── requirements.txt      # Python 依赖列表副本
-│   ├── 项目功能文档.md       # 功能说明文档 (用户视角)
-│   └── 项目开发文档.md       # 开发技术文档 (开发者视角)
 ├── llm_adapters/             # LLM 适配器层
 │   ├── __init__.py
 │   ├── base_adapter.py       # 适配器基类 (定义统一接口)
@@ -220,13 +206,19 @@ project_root/
 │   └── hierarchical_memory_db.py  # 分层记忆管理器 (核心模块)
 ├── logs/                     # 日志文件目录
 │   └── app.log               # 应用日志
+├── scripts/                  # 脚本工具
+│   └── migrate_role_meta.py  # 角色元数据迁移脚本
 ├── tools/                    # 辅助工具
 │   ├── API_test_tool.py      # API 测试工具
 │   ├── image_token_counter.py # 图片 Token 计数工具
 │   └── test.jpg              # 测试图片
-├── main.py                   # 全局启动入口 (Web 模式)
+├── main.py                   # 全局启动入口 (FastAPI Web 服务)
 ├── roleplay_core.py          # 角色扮演核心会话逻辑 (RoleplaySession)
-└── structure                 # 本文件 - 项目结构说明
+├── requirements.txt          # Python 依赖列表
+├── pyproject.toml            # 项目配置文件 (Poetry/pip)
+├── structure                 # 项目结构说明
+├── test_api_latency.py       # API 延迟测试脚本
+└── test_qwen_adapter.py      # 通义千问适配器测试脚本
 ```
 
 ## 分层记忆系统
@@ -273,7 +265,28 @@ project_root/
 
 ## 版本更新
 
-详细开发时间线可参考[项目开发文档](./项目开发文档.md)
+### v3.3.1 (2026-04-19)
+
+新特性:
+1. 知识库引用显示优化
+   - 引用标签（Citation Tag）系统：将引用内容从内联全文显示改为紧凑的标签形式
+   - 输入阶段：标签显示在输入框上方，展示文件名+字符范围（如 `报告.docx :123~246`），支持 × 删除和点击预览
+   - 发送后阶段：只读标签显示在用户消息气泡下方，点击可预览引用内容
+   - 支持多条引用同时存在，每条独立管理
+2. 后端扩展
+   - 新增 `CitationMeta` 数据模型：存储知识库/文档元数据及字符范围（kb_id, doc_id, char_start, char_end）
+   - 新增文档内容范围查询 API：`GET /knowledge-bases/{kb_id}/documents/{doc_id}/content?start=N&end=M`
+   - WebSocket 处理层根据 metadata 动态拼接完整引用文本到 LLM 请求
+   - 持久化层 context JSON 存储 `knowledge_citations` 元数据数组（不含全文），总结时自动排除引用内容
+3. 全选引用功能
+   - 文档预览区工具栏新增"全选引用"按钮，一键将整个文档加入引用
+4. 历史恢复优化
+   - 加载带引用的历史消息时，自动剥离引用包装文本，避免气泡内重复显示
+
+Bug 修复:
+1. 修复确认引用按钮 TypeError（const 变量重复赋值）
+2. 修复发送带引用消息时 appendChild TypeError（renderCitationTags 返回值问题）
+3. 修复跨段落选区字符偏移漂移（Section Offset Map 机制精确映射 DOM 选区到 plain_text_preview 字符位置）
 
 ### v3.3.0 (2026-04-19)
 
@@ -359,5 +372,5 @@ MIT License
 
 ---
 
-版本: v3.3.0  
+版本: v3.3.1
 最后更新: 2026-04-19
