@@ -10,6 +10,15 @@ class KnowledgeBaseRef(BaseModel):
     selected_text: str
     selected_length: int
 
+class CitationMeta(BaseModel):
+    """引用元数据"""
+    kb_id: str
+    kb_name: str
+    doc_id: str
+    doc_name: str
+    char_start: int
+    char_end: int
+
 class ChatRequest(BaseModel):
     user_input: str
     role_id: str
@@ -17,6 +26,7 @@ class ChatRequest(BaseModel):
     enable_think: bool = False
     force_deep_recall: bool = False
     knowledge_base_ref: Optional[KnowledgeBaseRef] = None
+    knowledge_citations: Optional[List[CitationMeta]] = Field(default_factory=list)
 
 class ChatStreamResponse(BaseModel):
     msg_type: str  # "status", "thought", "answer", "error"
