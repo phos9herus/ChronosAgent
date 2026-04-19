@@ -20,7 +20,8 @@ const state = {
     enableSearch: false,
     currentModel: "qwen3.5-plus",
     depthRecallMode: "off", // "off" | "normal" | "enhanced"
-    models: {} // 从后端获取的模型详细信息
+    models: {}, // 从后端获取的模型详细信息
+    pendingCitations: [] // 待发送的知识库引用元数据
 };
 
 const dom = {
@@ -578,6 +579,11 @@ async function selectRole(id) {
     }
 }
 
+function stripCitationContentFromText(text) {
+    if (!text) return text;
+    return text.replace(/\[来自知识库:.*?\][\s\S]*?\[\/知识库引用\]/g, '').trim();
+}
+
 async function loadChatHistory(roleId, conversationId = null) {
     let url = `/api/roles/${roleId}/history`;
     if (conversationId) {
@@ -594,8 +600,13 @@ async function loadChatHistory(roleId, conversationId = null) {
         return;
     }
     history.forEach(msg => {
-        if (msg.role === 'user') appendUserMessage(msg.content, msg.images || []);
-        else if (msg.role !== 'system') appendAIMessage(msg.content, msg.model, msg.token_usage);
+        if (msg.role === 'user') {
+            var cleanContent = msg.content;
+            if (msg.knowledge_citations && msg.knowledge_citations.length > 0) {
+                cleanContent = stripCitationContentFromText(msg.content);
+            }
+            appendUserMessage(cleanContent, msg.images || [], msg.knowledge_citations || null);
+        } else if (msg.role !== 'system') appendAIMessage(msg.content, msg.model, msg.token_usage);
     });
     const boundary = document.createElement('div');
     boundary.className = 'system-hint'; boundary.innerText = '--- 历史记忆 ---';
@@ -603,7 +614,7 @@ async function loadChatHistory(roleId, conversationId = null) {
     smoothScrollToBottom();
 }
 
-function appendUserMessage(text, images) {
+function appendUserMessage(text, images, citations) {
     const row = document.createElement('div'); row.className = 'message-row user';
     const bubble = document.createElement('div'); bubble.className = 'message-bubble';
     if (images && images.length > 0) {
@@ -612,6 +623,11 @@ function appendUserMessage(text, images) {
         bubble.appendChild(imgC);
     }
     if (text) { const t = document.createElement('div'); t.innerText = text; bubble.appendChild(t); }
+
+    if (citations && citations.length > 0) {
+        const citationBar = renderCitationTags(citations, false);
+        bubble.appendChild(citationBar);
+    }
 
     const avatar = document.createElement('div'); avatar.className = 'msg-avatar';
     // 强制聊天气泡显示 1:1 圆形头像，忽略 gradient 模式
@@ -830,9 +846,13 @@ async function sendMessage() {
     if (!state.currentRoleId || !state.currentConversationId || state.isGenerating) return;
 
     const text = isBubbleExpanded ? dom.bubbleTextarea.value.trim() : dom.userInput.value.trim();
-    if (!text && state.selectedImages.length === 0) return;
+    if (!text && state.selectedImages.length === 0 && state.pendingCitations.length === 0) return;
 
-    appendUserMessage(text, state.selectedImages);
+    const currentCitations = state.pendingCitations.length > 0 ? state.pendingCitations.map(function(c) {
+        return { kb_id: c.kb_id, kb_name: c.kb_name, doc_id: c.doc_id, doc_name: c.doc_name, char_start: c.char_start, char_end: c.char_end };
+    }) : [];
+
+    appendUserMessage(text, state.selectedImages, currentCitations.length > 0 ? currentCitations : null);
     showTypingIndicator();
 
     const payload = {
@@ -843,7 +863,8 @@ async function sendMessage() {
         enable_think: state.enableThink,
         enable_search: state.enableSearch,
         depth_recall_mode: state.depthRecallMode,
-        model: state.currentModel
+        model: state.currentModel,
+        knowledge_citations: currentCitations
     };
     state.isGenerating = true;
 
@@ -854,6 +875,8 @@ async function sendMessage() {
     dom.userInput.value = '';
     dom.previewArea.innerHTML = '';
     state.selectedImages = [];
+    state.pendingCitations = [];
+    renderCitationTags([], true);
 
     ws.send(JSON.stringify(payload));
 }
@@ -2681,6 +2704,110 @@ let docSelectorState = {
     _savedModalStyle: null
 };
 
+function renderCitationTag(citation, editable) {
+    const tag = document.createElement('div');
+    tag.className = 'citation-tag' + (editable ? '' : ' citation-tag-readonly');
+    tag.dataset.kbId = citation.kb_id;
+    tag.dataset.docId = citation.doc_id;
+    tag.dataset.charStart = citation.char_start;
+    tag.dataset.charEnd = citation.char_end;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'citation-tag-filename';
+    nameSpan.textContent = citation.doc_name;
+    nameSpan.title = citation.kb_name + ' / ' + citation.doc_name;
+
+    const rangeSpan = document.createElement('span');
+    rangeSpan.className = 'citation-tag-range';
+    rangeSpan.textContent = ' :' + citation.char_start + '～' + citation.char_end;
+
+    tag.appendChild(nameSpan);
+    tag.appendChild(rangeSpan);
+
+    if (editable) {
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'citation-tag-close';
+        closeBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+        closeBtn.onclick = function(e) {
+            e.stopPropagation();
+            removeCitationTag(citation);
+        };
+        tag.appendChild(closeBtn);
+    }
+
+    tag.onclick = function(e) {
+        if (e.target.closest('.citation-tag-close')) return;
+        showCitationPreview(citation);
+    };
+
+    return tag;
+}
+
+function renderCitationTags(citations, editable) {
+    if (editable) {
+        const container = document.getElementById('citation-tags-container');
+        if (!container) return null;
+        container.innerHTML = '';
+        if (!citations || citations.length === 0) return null;
+        citations.forEach(function(c) {
+            container.appendChild(renderCitationTag(c, true));
+        });
+        return null;
+    } else {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'citation-tags-container';
+        if (citations && citations.length > 0) {
+            citations.forEach(function(c) {
+                wrapper.appendChild(renderCitationTag(c, false));
+            });
+        }
+        return wrapper;
+    }
+}
+
+function removeCitationTag(citation) {
+    const idx = state.pendingCitations.findIndex(function(c) {
+        return c.kb_id === citation.kb_id && c.doc_id === citation.doc_id &&
+               c.char_start === citation.char_start && c.char_end === citation.char_end;
+    });
+    if (idx > -1) {
+        state.pendingCitations.splice(idx, 1);
+    }
+    renderCitationTags(state.pendingCitations, true);
+}
+
+function showCitationPreview(citation) {
+    const modal = document.getElementById('citation-preview-modal');
+    const titleEl = document.getElementById('citation-preview-title');
+    const bodyEl = document.getElementById('citation-preview-body');
+
+    if (!modal || !titleEl || !bodyEl) return;
+
+    titleEl.textContent = citation.doc_name + ' :' + citation.char_start + '～' + citation.char_end;
+    bodyEl.textContent = '加载中...';
+    bodyEl.style.color = 'var(--text-secondary)';
+    modal.style.display = 'flex';
+
+    fetch('/api/knowledge-bases/' + citation.kb_id + '/documents/' + citation.doc_id + '/content?start=' + citation.char_start + '&end=' + citation.char_end)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.error) {
+                bodyEl.textContent = '加载失败: ' + data.error;
+            } else {
+                bodyEl.textContent = data.content || '(无内容)';
+                bodyEl.style.color = 'var(--text-primary)';
+            }
+        })
+        .catch(function(err) {
+            bodyEl.textContent = '加载失败: ' + err.message;
+        });
+}
+
+function closeCitationPreview() {
+    var modal = document.getElementById('citation-preview-modal');
+    if (modal) modal.style.display = 'none';
+}
+
 async function openKnowledgeBaseSelector() {
     closeUploadMenu();
 
@@ -2709,6 +2836,8 @@ async function openKnowledgeBaseSelector() {
 
 function closeKbDocSelector() {
     document.getElementById('kb-doc-selector').style.display = 'none';
+    var btn = document.getElementById('kb-select-all-btn');
+    if (btn) btn.style.display = 'none';
     clearDocSelection();
 }
 
@@ -2811,49 +2940,71 @@ async function loadAndRenderDocPreview(docId) {
 function renderParsedContent(sections, container) {
     let html = '';
 
-    for (const section of sections) {
+    for (let si = 0; si < sections.length; si++) {
+        const section = sections[si];
+        let sectionHtml = '';
         switch (section.type) {
             case 'heading':
                 const level = Math.min(Math.max(section.level || 1, 1), 3);
-                html += `<h${level}>${escapeHtml(section.content)}</h${level}>`;
+                sectionHtml += `<h${level}>${escapeHtml(section.content)}</h${level}>`;
                 break;
 
             case 'paragraph':
-                html += `<p>${escapeHtml(section.content).replace(/\n/g, '<br>')}</p>`;
+                sectionHtml += `<p>${escapeHtml(section.content).replace(/\n/g, '<br>')}</p>`;
                 break;
 
             case 'table':
                 if (section.headers && section.headers.length > 0) {
-                    html += '<table><thead><tr>';
+                    sectionHtml += '<table><thead><tr>';
                     section.headers.forEach(h => {
-                        html += `<th>${escapeHtml(h)}</th>`;
+                        sectionHtml += `<th>${escapeHtml(h)}</th>`;
                     });
-                    html += '</tr></thead><tbody>';
+                    sectionHtml += '</tr></thead><tbody>';
 
                     if (section.rows && section.rows.length > 0) {
                         section.rows.forEach(row => {
-                            html += '<tr>';
+                            sectionHtml += '<tr>';
                             row.forEach(cell => {
-                                html += `<td>${escapeHtml(cell)}</td>`;
+                                sectionHtml += `<td>${escapeHtml(cell)}</td>`;
                             });
-                            html += '</tr>';
+                            sectionHtml += '</tr>';
                         });
                     }
 
-                    html += '</tbody></table>';
+                    sectionHtml += '</tbody></table>';
                 } else if (section.markdown) {
-                    html += `<pre style="white-space:pre-wrap;">${escapeHtml(section.markdown)}</pre>`;
+                    sectionHtml += `<pre style="white-space:pre-wrap;">${escapeHtml(section.markdown)}</pre>`;
                 }
                 break;
 
             default:
                 if (section.content) {
-                    html += `<p>${escapeHtml(section.content)}</p>`;
+                    sectionHtml += `<p>${escapeHtml(section.content)}</p>`;
                 }
         }
+        html += `<span data-section-index="${si}">${sectionHtml}</span>`;
     }
 
     container.innerHTML = html;
+
+    docSelectorState._sectionOffsets = buildSectionOffsetMap(sections);
+
+    var selectAllBtn = document.getElementById('kb-select-all-btn');
+    if (!selectAllBtn) {
+        selectAllBtn = document.createElement('button');
+        selectAllBtn.id = 'kb-select-all-btn';
+        selectAllBtn.textContent = '全选引用';
+        selectAllBtn.className = 'btn-secondary';
+        selectAllBtn.style.cssText = 'padding:4px 12px; font-size:12px;';
+        selectAllBtn.onclick = function(e) { e.stopPropagation(); selectAllForCitation(); };
+        var fullscreenBtn = document.querySelector('[onclick="toggleDocPreviewFullscreen()"]');
+        if (fullscreenBtn && fullscreenBtn.parentElement) {
+            fullscreenBtn.parentElement.insertBefore(selectAllBtn, fullscreenBtn);
+        } else {
+            container.parentNode.insertBefore(selectAllBtn, container);
+        }
+    }
+    selectAllBtn.style.display = 'inline-block';
 }
 
 function resetPreviewArea() {
@@ -2917,6 +3068,88 @@ function clearDocSelection() {
     updateSelectedTextLength(0);
 }
 
+function buildSectionOffsetMap(sections) {
+    var offsets = [];
+    var pos = 0;
+    for (var i = 0; i < sections.length; i++) {
+        offsets.push(pos);
+        var s = sections[i];
+        if (s.type === 'heading') {
+            var level = Math.min(Math.max(s.level || 1, 1), 3);
+            pos += 1 + level + 1 + (s.content || '').length + 1;
+        } else if (s.type === 'paragraph') {
+            pos += (s.content || '').length + 1;
+        } else if (s.type === 'table' && s.markdown) {
+            pos += 1 + (s.markdown || '').length + 1;
+        } else if (s.content) {
+            pos += (s.content || '').length + 1;
+        }
+    }
+    return offsets;
+}
+
+function getCharOffsetInSection(sectionEl, node, offset) {
+    var treeWalker = document.createTreeWalker(sectionEl, NodeFilter.SHOW_TEXT, null, false);
+    var charOffset = 0;
+    var current;
+    while ((current = treeWalker.nextNode())) {
+        if (current === node) {
+            return charOffset + offset;
+        }
+        charOffset += current.textContent.length;
+    }
+    return charOffset + offset;
+}
+
+function findSectionIndex(node) {
+    var el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    while (el) {
+        if (el.hasAttribute && el.hasAttribute('data-section-index')) {
+            return parseInt(el.getAttribute('data-section-index'), 10);
+        }
+        el = el.parentElement;
+    }
+    return -1;
+}
+
+function getCharOffsetInPlainPreview(previewEl, node, offset, sectionOffsets) {
+    var sectionIdx = findSectionIndex(node);
+    if (sectionIdx < 0 || !sectionOffsets || sectionIdx >= sectionOffsets.length) {
+        var tw = document.createTreeWalker(previewEl, NodeFilter.SHOW_TEXT, null, false);
+        var off = 0;
+        var cur;
+        while ((cur = tw.nextNode())) {
+            if (cur === node) return off + offset;
+            off += cur.textContent.length;
+        }
+        return off + offset;
+    }
+    var sectionEl = previewEl.querySelector('[data-section-index="' + sectionIdx + '"]');
+    if (!sectionEl) return sectionOffsets[sectionIdx] + offset;
+    var intraOffset = getCharOffsetInSection(sectionEl, node, offset);
+    return sectionOffsets[sectionIdx] + intraOffset;
+}
+
+function selectAllForCitation() {
+    const currentDoc = docSelectorState.documents.find(d => d.doc_id === docSelectorState.selectedDocId);
+    const currentKb = docSelectorState.knowledgeBases.find(k => k.kb_id === docSelectorState.selectedKbId);
+    if (!currentDoc || !currentKb) return;
+
+    const plainText = docSelectorState.parsedData ? (docSelectorState.parsedData.plain_text_preview || '') : '';
+    const citation = {
+        kb_id: currentKb.kb_id,
+        kb_name: currentKb.name,
+        doc_id: currentDoc.doc_id,
+        doc_name: currentDoc.filename,
+        char_start: 0,
+        char_end: plainText.length,
+        full_text: plainText
+    };
+    state.pendingCitations.push(citation);
+    renderCitationTags(state.pendingCitations, true);
+    closeKbDocSelector();
+}
+
 function confirmDocumentSelection() {
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
@@ -2931,24 +3164,39 @@ function confirmDocumentSelection() {
 
     if (!currentDoc || !currentKb) return;
 
-    const refText = `\n[来自知识库: ${currentKb.name} - ${currentDoc.filename}]\n${selectedText}\n[/知识库引用]\n`;
+    const plainText = docSelectorState.parsedData ? (docSelectorState.parsedData.plain_text_preview || '') : '';
+    let charStart = 0;
+    let charEnd = plainText.length;
 
-    const inputEl = document.getElementById('user-input');
-    if (inputEl) {
-        const startPos = inputEl.selectionStart;
-        const endPos = inputEl.selectionEnd;
-        const before = inputEl.value.substring(0, startPos);
-        const after = inputEl.value.substring(endPos);
-
-        inputEl.value = before + refText + after;
-        inputEl.focus();
-        inputEl.setSelectionRange(
-            startPos + refText.length,
-            startPos + refText.length
-        );
-
-        inputEl.dispatchEvent(new Event('input'));
+    try {
+        const range = selection.getRangeAt(0);
+        const previewEl = document.getElementById('kb-doc-preview');
+        const offsets = docSelectorState._sectionOffsets || [];
+        if (previewEl && previewEl.contains(range.startContainer) && previewEl.contains(range.endContainer)) {
+            charStart = getCharOffsetInPlainPreview(previewEl, range.startContainer, range.startOffset, offsets);
+            charEnd = getCharOffsetInPlainPreview(previewEl, range.endContainer, range.endOffset, offsets);
+            if (charEnd < charStart) { var t = charEnd; charEnd = charStart; charStart = t; }
+        } else {
+            var idx = plainText.indexOf(selectedText);
+            if (idx !== -1) { charStart = idx; charEnd = idx + selectedText.length; }
+        }
+    } catch(e) {
+        var idx2 = plainText.indexOf(selectedText);
+        if (idx2 !== -1) { charStart = idx2; charEnd = idx2 + selectedText.length; }
     }
+
+    const citation = {
+        kb_id: currentKb.kb_id,
+        kb_name: currentKb.name,
+        doc_id: currentDoc.doc_id,
+        doc_name: currentDoc.filename,
+        char_start: charStart,
+        char_end: charEnd,
+        full_text: selectedText
+    };
+
+    state.pendingCitations.push(citation);
+    renderCitationTags(state.pendingCitations, true);
 
     closeKbDocSelector();
 }
