@@ -7,6 +7,7 @@ import uuid
 import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.chat_service import chat_service
+from app.services.knowledge_service import knowledge_service
 from app.utils.async_notifier import set_event_loop
 
 router = APIRouter()
@@ -79,8 +80,24 @@ async def websocket_chat_endpoint(websocket: WebSocket):
             conversation_id = data.get("conversation_id", None)  # 新增：对话ID参数
             depth_recall_mode = data.get("depth_recall_mode", None)  # 新增：深度回忆模式参数
 
-            # 处理知识库引用（Task 12）
-            if data.get('knowledge_base_ref'):
+            knowledge_citations = data.get('knowledge_citations')
+            if knowledge_citations:
+                citation_texts = []
+                for citation in knowledge_citations:
+                    try:
+                        content = knowledge_service.get_document_content_range(
+                            citation['kb_id'],
+                            citation['doc_id'],
+                            citation['char_start'],
+                            citation['char_end']
+                        )
+                        ref_text = f"\n[来自知识库: {citation['kb_name']} - {citation['doc_name']}]\n{content}\n[/知识库引用]\n"
+                        citation_texts.append(ref_text)
+                    except Exception as e:
+                        print(f"获取知识库引用内容失败: {e}")
+                if citation_texts:
+                    user_input = ''.join(citation_texts) + (user_input or '')
+            elif data.get('knowledge_base_ref'):
                 kb_ref = data['knowledge_base_ref']
                 ref_text = f"\n[来自知识库: {kb_ref['kb_name']} - {kb_ref['doc_name']}]\n{kb_ref['selected_text']}\n[/知识库引用]\n"
                 user_input = (user_input or '') + ref_text
@@ -140,9 +157,10 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                     enable_think=enable_think,
                     enable_search=enable_search,
                     force_deep_recall=force_deep_recall,
-                    model=model,  # 新增：传递模型参数
-                    conversation_id=conversation_id,  # 新增：传递对话ID参数
-                    depth_recall_mode=depth_recall_mode  # 新增：传递深度回忆模式参数
+                    model=model,
+                    conversation_id=conversation_id,
+                    depth_recall_mode=depth_recall_mode,
+                    knowledge_citations=knowledge_citations if knowledge_citations else None
                 )
 
                 # 4. 迭代生成器并推送

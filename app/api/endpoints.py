@@ -232,6 +232,8 @@ async def get_role_history(role_id: str):
             msg_data["model"] = msg["model"]
         if "token_usage" in msg:
             msg_data["token_usage"] = msg["token_usage"]
+        if "knowledge_citations" in msg:
+            msg_data["knowledge_citations"] = msg["knowledge_citations"]
         history.append(msg_data)
     return history
 
@@ -446,6 +448,8 @@ async def get_conversation_history(role_id: str, conv_id: str):
             msg_data["model"] = msg["model"]
         if "token_usage" in msg:
             msg_data["token_usage"] = msg["token_usage"]
+        if "knowledge_citations" in msg:
+            msg_data["knowledge_citations"] = msg["knowledge_citations"]
         history.append(msg_data)
     
     session.memory_manager.switch_conversation(current_conv_id)
@@ -655,3 +659,22 @@ async def delete_document_from_kb(kb_id: str, doc_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/knowledge-bases/{kb_id}/documents/{doc_id}/content")
+async def get_document_content_range(kb_id: str, doc_id: str, start: int = 0, end: int = None):
+    """获取文档指定字符范围的内容（用于引用预览）"""
+    try:
+        result = knowledge_service.get_document_content_range(kb_id, doc_id, start, end)
+
+        if "error" in result:
+            if "不存在" in result["error"]:
+                raise HTTPException(status_code=404, detail=result["error"])
+            else:
+                raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取文档内容失败: {str(e)}")
