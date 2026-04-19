@@ -51,7 +51,8 @@ class RoleplaySession:
 
     def stream_chat(self, user_input: str, images: list = None, original_input: str = None,
                     force_deep_recall: bool = False, model: str = None, enable_search: bool = False,
-                    conversation_id: str = None, depth_recall_mode: str = None, **kwargs) -> \
+                    conversation_id: str = None, depth_recall_mode: str = None,
+                    knowledge_citations=None, **kwargs) -> \
             Generator[Tuple[str, str], None, None]:
         """
         核心会话流：处理动态参数提取、记忆检索、消息构建及多模态图片透传
@@ -148,7 +149,7 @@ class RoleplaySession:
 
             # 【核心修复 1】：正式将用户的输入写入记忆库，否则 AI 会失去用户的上下文
             if user_input.strip():
-                self.memory_manager.add_memory(role="user", text=user_input)
+                self.memory_manager.add_memory(role="user", text=user_input, knowledge_citations=knowledge_citations)
 
             # 将组装好的 messages 传给底层适配器，kwargs 中已经包含了最新的思考预算等参数
             
