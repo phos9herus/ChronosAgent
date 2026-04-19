@@ -1169,7 +1169,7 @@ class HierarchicalMemoryManager:
         
         return core_content.strip()
 
-    def add_memory(self, role: str, text: str, model: str = None, token_usage: dict = None, memory_record: dict = None):
+    def add_memory(self, role: str, text: str, model: str = None, token_usage: dict = None, memory_record: dict = None, knowledge_citations=None):
         if not text.strip(): return
         
         if memory_record:
@@ -1222,6 +1222,8 @@ class HierarchicalMemoryManager:
                 memory_data["model"] = model
             if token_usage:
                 memory_data["token_usage"] = token_usage
+            if knowledge_citations:
+                memory_data["knowledge_citations"] = knowledge_citations
 
             self.context_buffer.append(memory_data)
             
