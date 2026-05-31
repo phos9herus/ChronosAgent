@@ -7,10 +7,46 @@
 
 # 完整的模型详细信息
 MODEL_DETAILS = {
+    "deepseek-v4-pro": {
+        "name": "deepseek-v4-pro",
+        "description": "旗舰级 MoE 大模型，总参1.6T、激活 49B，原生支持百万级超长上下文。依托海量高质量训练数据，具备顶尖数学逻辑、复杂推理、专业代码与长文本深度解析能力，适配高阶科研、复杂办公、深度智能代理等高难度场景。",
+        "multimodal": False,
+        "contextWindow": 1000000,
+        "supportsThinking": True,
+        "maxThinkingBudget": 256000,
+        "supportsWebSearch": True,
+        "features": ["工具集成", "Web搜索", "代码解释器", "深度思考", "长上下文"],
+        "isToolEnabled": True,
+        "tools": ["Web搜索", "网页信息提取", "代码解释器"]
+    },
+    "deepseek-v4-flash": {
+        "name": "deepseek-v4-flash",
+        "description": "高效轻量化MoE模型，总参284B，激活13B，原生支持百万超长上下文能力。推理速度快、延迟低、调用成本低廉，综合能力均衡，主打高并发、轻量化任务，适合日常对话、内容创作、基础 RAG、批量文案处理等普惠刚需场景。",
+        "multimodal": False,
+        "contextWindow": 1000000,
+        "supportsThinking": True,
+        "maxThinkingBudget": 256000,
+        "supportsWebSearch": True,
+        "features": ["工具集成", "Web搜索", "代码解释器", "深度思考", "长上下文"],
+        "isToolEnabled": True,
+        "tools": ["Web搜索", "网页信息提取", "代码解释器"]
+    },
+    "qwen3.7-max": {
+        "name": "Qwen3.7-Max",
+        "description": "Qwen3.7系列中规模最大、综合能力最强的Max模型，当前开放纯文本模型能力供体验。Qwen3.7是面向智能体时代的新一代旗舰模型，核心优势在于智能体能力的广度与深度：在编程、办公与生产力、长周期自主执行方面均能出色胜任各项任务。",
+        "multimodal": False,
+        "contextWindow": 1000000,
+        "supportsThinking": True,
+        "maxThinkingBudget": 256000,
+        "supportsWebSearch": True,
+        "features": ["工具集成", "Web搜索", "代码解释器", "深度思考", "长上下文"],
+        "isToolEnabled": True,
+        "tools": ["Web搜索", "网页信息提取", "代码解释器"]
+    },
     "qwen3-max": {
         "name": "Qwen3-Max",
         "description": "通义千问3旗舰版，集成Web搜索、网页信息提取和代码解释器三项工具，通过在思考过程中引入外部工具，在复杂问题上实现更高的准确率。",
-        "multimodal": True,
+        "multimodal": False,
         "contextWindow": 262144,
         "supportsThinking": True,
         "maxThinkingBudget": 81920,
